@@ -169,11 +169,13 @@ Notes:
 Each PR includes motivation, implementation instructions, and testable standards.
 
 ### PR 1 — Project scaffolding
+**Status:** Complete (2025-12-23).  
 **Motivation:** Establish a clean GTK4+C base that builds and runs.  
 **Instructions:** Set up Meson; app ID; basic window; logging; README.  
 **Testable standard:** Build passes; running binary opens a window without errors.
 
 ### PR 2 — Visual system & fonts
+**Status:** Complete (2025-12-23).  
 **Motivation:** Avoid default GTK look; lock a modern visual identity.  
 **Instructions:** Create CSS theme, palette, typography; bundle/declare font.  
 **Testable standard:** UI uses new colors and font; no default theme styling visible.
@@ -226,4 +228,3 @@ Each PR includes motivation, implementation instructions, and testable standards
 - Overlay always visible; no click‑through.
 - Only Chrome supported for relevance checks (for now).
 - Modern visual design prioritized over default GTK styling.
-

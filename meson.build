@@ -5,6 +5,7 @@ project('xfce4-floating-pomodoro', 'c',
 )
 
 gtk4_dep = dependency('gtk4', version: '>=4.8')
+fontconfig_dep = dependency('fontconfig')
 gnome = import('gnome')
 
 conf = configuration_data()

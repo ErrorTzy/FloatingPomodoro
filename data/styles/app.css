@@ -11,27 +11,6 @@
 @define-color pomodoro_border rgba(15, 76, 92, 0.14);
 @define-color pomodoro_shadow rgba(15, 76, 92, 0.12);
 
-@font-face {
-  font-family: "Manrope";
-  font-weight: 400;
-  font-style: normal;
-  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Regular.ttf");
-}
-
-@font-face {
-  font-family: "Manrope";
-  font-weight: 600;
-  font-style: normal;
-  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-SemiBold.ttf");
-}
-
-@font-face {
-  font-family: "Manrope";
-  font-weight: 700;
-  font-style: normal;
-  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Bold.ttf");
-}
-
 * {
   font-family: "Manrope", "Sans";
   color: @pomodoro_text;
@@ -113,10 +92,14 @@ label.tag {
 
 button.btn-primary {
   background-color: @pomodoro_primary;
+  background-image: none;
   color: #ffffff;
-  border: none;
+  border: 1px solid @pomodoro_primary;
+  border-image: none;
   border-radius: 999px;
+  box-shadow: none;
   padding: 10px 18px;
+  text-shadow: none;
   font-weight: 600;
 }
 
@@ -130,15 +113,32 @@ button.btn-primary:active {
 
 button.btn-secondary {
   background-color: transparent;
+  background-image: none;
   color: @pomodoro_primary;
   border: 1px solid @pomodoro_primary;
+  border-image: none;
   border-radius: 999px;
+  box-shadow: none;
   padding: 10px 16px;
+  text-shadow: none;
   font-weight: 600;
 }
 
 button.btn-secondary:hover {
   background-color: @pomodoro_surface_alt;
+}
+
+button.btn-primary:focus-visible,
+button.btn-secondary:focus-visible {
+  box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
+}
+
+button.btn-primary label {
+  color: #ffffff;
+}
+
+button.btn-secondary label {
+  color: @pomodoro_primary;
 }
 
 label.section-title {

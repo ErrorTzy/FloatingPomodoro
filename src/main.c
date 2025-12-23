@@ -1,4 +1,6 @@
 #include <gtk/gtk.h>
+#include <fontconfig/fontconfig.h>
+#include <pango/pangocairo.h>
 
 #include "config.h"
 #include "xfce4_floating_pomodoro_resources.h"
@@ -86,6 +88,76 @@ install_resources(void)
 }
 
 static void
+install_fonts(void)
+{
+  const char *font_resources[] = {
+      "/com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Regular.ttf",
+      "/com/scott/Xfce4FloatingPomodoro/fonts/Manrope-SemiBold.ttf",
+      "/com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Bold.ttf"};
+  const char *font_files[] = {"Manrope-Regular.ttf",
+                              "Manrope-SemiBold.ttf",
+                              "Manrope-Bold.ttf"};
+  const size_t font_count = G_N_ELEMENTS(font_resources);
+
+  char *font_dir = g_build_filename(g_get_user_cache_dir(),
+                                    "xfce4-floating-pomodoro",
+                                    "fonts",
+                                    NULL);
+  g_mkdir_with_parents(font_dir, 0755);
+
+  for (size_t i = 0; i < font_count; i++) {
+    char *target_path = g_build_filename(font_dir, font_files[i], NULL);
+    if (!g_file_test(target_path, G_FILE_TEST_EXISTS)) {
+      GError *error = NULL;
+      GBytes *data = g_resources_lookup_data(font_resources[i],
+                                             G_RESOURCE_LOOKUP_FLAGS_NONE,
+                                             &error);
+      if (data == NULL) {
+        g_warning("Failed to load font resource '%s': %s",
+                  font_resources[i],
+                  error ? error->message : "unknown error");
+        g_clear_error(&error);
+      } else {
+        gsize length = 0;
+        const char *bytes = g_bytes_get_data(data, &length);
+        if (!g_file_set_contents(target_path, bytes, length, &error)) {
+          g_warning("Failed to write font file '%s': %s",
+                    target_path,
+                    error ? error->message : "unknown error");
+          g_clear_error(&error);
+        }
+        g_bytes_unref(data);
+      }
+    }
+    g_free(target_path);
+  }
+
+  FcConfig *config = FcInitLoadConfigAndFonts();
+  if (config == NULL) {
+    g_debug("Fontconfig not available; skipping bundled font registration");
+    g_free(font_dir);
+    return;
+  }
+
+  FcConfigSetCurrent(config);
+
+  gboolean added = FcConfigAppFontAddDir(config,
+                                         (const FcChar8 *)font_dir);
+  if (!added) {
+    g_debug("Failed to register bundled fonts from '%s'", font_dir);
+    g_free(font_dir);
+    return;
+  }
+
+  PangoFontMap *fontmap = pango_cairo_font_map_get_default();
+  if (fontmap != NULL) {
+    pango_font_map_changed(fontmap);
+  }
+
+  g_free(font_dir);
+}
+
+static void
 load_css(void)
 {
   GtkCssProvider *provider = gtk_css_provider_new();
@@ -107,6 +179,7 @@ on_startup(GApplication *app, gpointer user_data)
   (void)app;
   (void)user_data;
 
+  install_fonts();
   load_css();
 }
 
