@@ -1,4 +1,8 @@
-app_sources = files('main.c') + resources
+app_sources = files(
+  'main.c',
+  'core/task_store.c',
+  'storage/task_storage.c',
+) + resources
 
 executable(
   'xfce4-floating-pomodoro',

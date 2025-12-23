@@ -90,6 +90,11 @@ label.tag {
   font-weight: 600;
 }
 
+label.tag-success {
+  background-color: @pomodoro_success;
+  color: #ffffff;
+}
+
 button.btn-primary {
   background-color: @pomodoro_primary;
   background-image: none;
@@ -128,6 +133,11 @@ button.btn-secondary:hover {
   background-color: @pomodoro_surface_alt;
 }
 
+button.btn-compact {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 button.btn-primary:focus-visible,
 button.btn-secondary:focus-visible {
   box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
@@ -158,4 +168,40 @@ label.stat-value {
 label.stat-label {
   font-size: 13px;
   color: @pomodoro_text_muted;
+}
+
+entry.task-entry {
+  background-color: @pomodoro_surface;
+  border-radius: 12px;
+  border: 1px solid @pomodoro_border;
+  padding: 8px 12px;
+}
+
+label.task-empty {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+  margin-top: 6px;
+}
+
+.task-list {
+  margin-top: 6px;
+}
+
+.task-row {
+  background-color: @pomodoro_surface_alt;
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+label.setting-label {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+}
+
+dropdown.archive-dropdown {
+  background-color: @pomodoro_surface_alt;
+  border-radius: 12px;
+  border: 1px solid @pomodoro_border;
+  padding: 6px;
 }
