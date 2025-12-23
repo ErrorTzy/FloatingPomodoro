@@ -95,6 +95,11 @@ label.tag-success {
   color: #ffffff;
 }
 
+label.tag-muted {
+  background-color: @pomodoro_text_muted;
+  color: #ffffff;
+}
+
 button.btn-primary {
   background-color: @pomodoro_primary;
   background-image: none;
@@ -187,11 +192,28 @@ label.task-empty {
   margin-top: 6px;
 }
 
+.task-scroller {
+  background-color: transparent;
+  border-radius: 16px;
+  border: 1px solid @pomodoro_border;
+  padding: 6px;
+}
+
 .task-row {
   background-color: @pomodoro_surface_alt;
   border-radius: 14px;
   padding: 8px 12px;
   margin-top: 8px;
+}
+
+expander.archive-expander > box > header {
+  padding: 6px 0;
+}
+
+expander.archive-expander > box > header label {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+  font-weight: 600;
 }
 
 label.setting-label {

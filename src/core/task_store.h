@@ -49,6 +49,7 @@ void task_store_apply_archive_policy(TaskStore *store);
 
 const char *pomodoro_task_get_id(const PomodoroTask *task);
 const char *pomodoro_task_get_title(const PomodoroTask *task);
+void pomodoro_task_set_title(PomodoroTask *task, const char *title);
 TaskStatus pomodoro_task_get_status(const PomodoroTask *task);
 GDateTime *pomodoro_task_get_created_at(const PomodoroTask *task);
 GDateTime *pomodoro_task_get_completed_at(const PomodoroTask *task);

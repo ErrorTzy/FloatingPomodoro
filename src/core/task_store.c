@@ -336,6 +336,23 @@ pomodoro_task_get_title(const PomodoroTask *task)
   return task ? task->title : NULL;
 }
 
+void
+pomodoro_task_set_title(PomodoroTask *task, const char *title)
+{
+  if (task == NULL || title == NULL) {
+    return;
+  }
+
+  char *trimmed = g_strstrip(g_strdup(title));
+  if (trimmed[0] == '\0') {
+    g_free(trimmed);
+    return;
+  }
+
+  g_free(task->title);
+  task->title = trimmed;
+}
+
 TaskStatus
 pomodoro_task_get_status(const PomodoroTask *task)
 {
