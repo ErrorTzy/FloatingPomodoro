@@ -5,6 +5,7 @@ project('xfce4-floating-pomodoro', 'c',
 )
 
 gtk4_dep = dependency('gtk4', version: '>=4.8')
+gnome = import('gnome')
 
 conf = configuration_data()
 conf.set_quoted('APP_ID', 'com.scott.Xfce4FloatingPomodoro')
@@ -14,6 +15,13 @@ conf.set_quoted('APP_VERSION', meson.project_version())
 configure_file(
   output: 'config.h',
   configuration: conf
+)
+
+resources = gnome.compile_resources(
+  'xfce4_floating_pomodoro_resources',
+  'data/resources.gresource.xml',
+  source_dir: 'data',
+  c_name: 'xfce4_floating_pomodoro'
 )
 
 subdir('src')

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/scott/Xfce4FloatingPomodoro">
+    <file>styles/app.css</file>
+    <file>fonts/Manrope-Regular.ttf</file>
+    <file>fonts/Manrope-SemiBold.ttf</file>
+    <file>fonts/Manrope-Bold.ttf</file>
+    <file>fonts/OFL.txt</file>
+  </gresource>
+</gresources>

@@ -1,0 +1,161 @@
+@define-color pomodoro_bg #F6F1E7;
+@define-color pomodoro_surface #FFF9F1;
+@define-color pomodoro_surface_alt #F2E9DD;
+@define-color pomodoro_primary #0F4C5C;
+@define-color pomodoro_accent #E36414;
+@define-color pomodoro_success #3D8361;
+@define-color pomodoro_warning #F2A900;
+@define-color pomodoro_error #D7263D;
+@define-color pomodoro_text #1E1E1E;
+@define-color pomodoro_text_muted #5B5B5B;
+@define-color pomodoro_border rgba(15, 76, 92, 0.14);
+@define-color pomodoro_shadow rgba(15, 76, 92, 0.12);
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 400;
+  font-style: normal;
+  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Regular.ttf");
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 600;
+  font-style: normal;
+  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-SemiBold.ttf");
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 700;
+  font-style: normal;
+  src: url("resource:///com/scott/Xfce4FloatingPomodoro/fonts/Manrope-Bold.ttf");
+}
+
+* {
+  font-family: "Manrope", "Sans";
+  color: @pomodoro_text;
+}
+
+window.app-window {
+  background-color: @pomodoro_bg;
+}
+
+.app-root {
+  padding: 28px;
+}
+
+.app-header {
+  margin-bottom: 8px;
+}
+
+label.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+label.app-subtitle {
+  color: @pomodoro_text_muted;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.card {
+  background-color: @pomodoro_surface;
+  border-radius: 18px;
+  border: 1px solid @pomodoro_border;
+  padding: 18px 20px;
+  box-shadow: 0 10px 26px -18px @pomodoro_shadow;
+}
+
+label.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: @pomodoro_text_muted;
+}
+
+label.timer-value {
+  font-size: 40px;
+  font-weight: 700;
+  color: @pomodoro_primary;
+}
+
+label.pill {
+  background-color: @pomodoro_surface_alt;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: @pomodoro_primary;
+}
+
+label.task-item {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+label.task-meta {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+}
+
+label.tag {
+  background-color: @pomodoro_accent;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+button.btn-primary {
+  background-color: @pomodoro_primary;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
+}
+
+button.btn-primary:hover {
+  background-color: shade(@pomodoro_primary, 1.08);
+}
+
+button.btn-primary:active {
+  background-color: shade(@pomodoro_primary, 0.92);
+}
+
+button.btn-secondary {
+  background-color: transparent;
+  color: @pomodoro_primary;
+  border: 1px solid @pomodoro_primary;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+button.btn-secondary:hover {
+  background-color: @pomodoro_surface_alt;
+}
+
+label.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: @pomodoro_text_muted;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+}
+
+label.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: @pomodoro_primary;
+}
+
+label.stat-label {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+}
