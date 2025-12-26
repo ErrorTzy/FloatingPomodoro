@@ -1,6 +1,9 @@
 #include <gtk/gtk.h>
 #include <fontconfig/fontconfig.h>
 #include <pango/pangocairo.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "core/task_store.h"
@@ -81,6 +84,23 @@ install_logging(void)
 {
   log_level_threshold = parse_log_level();
   g_log_set_writer_func(pomodoro_log_writer, NULL, NULL);
+}
+
+static void
+crash_handler(int signum)
+{
+  void *frames[48];
+  int size = backtrace(frames, (int)(sizeof(frames) / sizeof(frames[0])));
+  g_printerr("Fatal signal %d received\n", signum);
+  backtrace_symbols_fd(frames, size, STDERR_FILENO);
+  _exit(1);
+}
+
+static void
+install_crash_handler(void)
+{
+  signal(SIGSEGV, crash_handler);
+  signal(SIGABRT, crash_handler);
 }
 
 static void
@@ -178,25 +198,21 @@ load_css(void)
 typedef enum {
   TASK_ACTION_COMPLETE = 0,
   TASK_ACTION_REACTIVATE = 1,
-  TASK_ACTION_EDIT = 2
+  TASK_ACTION_EDIT = 2,
+  TASK_ACTION_ARCHIVE = 3,
+  TASK_ACTION_DELETE = 4
 } TaskAction;
 
 typedef struct {
   TaskStore *store;
   GtkWindow *window;
+  GtkWindow *settings_window;
+  GtkWindow *archived_window;
   GtkWidget *task_list;
   GtkWidget *task_empty_label;
-  GtkWidget *archived_list;
-  GtkWidget *archived_empty_label;
   GtkWidget *task_entry;
   GtkWidget *current_task_label;
   GtkWidget *current_task_meta;
-  GtkWidget *archive_dropdown;
-  GtkWidget *archive_days_row;
-  GtkWidget *archive_keep_row;
-  GtkSpinButton *archive_days_spin;
-  GtkSpinButton *archive_keep_spin;
-  gboolean suppress_archive_signals;
 } AppState;
 
 typedef struct {
@@ -206,11 +222,32 @@ typedef struct {
   GtkWidget *entry;
 } RenameDialog;
 
+typedef struct {
+  AppState *state;
+  GtkWindow *window;
+  GtkWidget *dropdown;
+  GtkWidget *days_row;
+  GtkWidget *keep_row;
+  GtkSpinButton *days_spin;
+  GtkSpinButton *keep_spin;
+  gboolean suppress_signals;
+} SettingsDialog;
+
+typedef struct {
+  GtkWindow *window;
+  GtkWidget *list;
+  GtkWidget *empty_label;
+} ArchivedDialog;
+
 static void on_task_action_clicked(GtkButton *button, gpointer user_data);
-static void on_archive_strategy_changed(GObject *object,
-                                        GParamSpec *pspec,
-                                        gpointer user_data);
-static void on_archive_value_changed(GtkSpinButton *spin, gpointer user_data);
+static void on_show_settings_clicked(GtkButton *button, gpointer user_data);
+static void on_show_archived_clicked(GtkButton *button, gpointer user_data);
+static void on_settings_strategy_changed(GObject *object,
+                                         GParamSpec *pspec,
+                                         gpointer user_data);
+static void on_settings_value_changed(GtkSpinButton *spin, gpointer user_data);
+static void settings_dialog_update_controls(SettingsDialog *dialog);
+static ArchivedDialog *archived_dialog_get(AppState *state);
 static void refresh_task_list(AppState *state);
 static void save_task_store(AppState *state);
 
@@ -222,6 +259,25 @@ app_state_free(gpointer data)
     return;
   }
 
+  if (state->settings_window != NULL) {
+    SettingsDialog *dialog =
+        g_object_get_data(G_OBJECT(state->settings_window), "settings-dialog");
+    if (dialog != NULL) {
+      dialog->state = NULL;
+    }
+    gtk_window_destroy(state->settings_window);
+  }
+
+  if (state->archived_window != NULL) {
+    ArchivedDialog *dialog = archived_dialog_get(state);
+    if (dialog != NULL) {
+      dialog->window = NULL;
+      dialog->list = NULL;
+      dialog->empty_label = NULL;
+    }
+    gtk_window_destroy(state->archived_window);
+  }
+
   task_store_free(state->store);
   g_free(state);
 }
@@ -230,6 +286,28 @@ static void
 rename_dialog_free(gpointer data)
 {
   RenameDialog *dialog = data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  g_free(dialog);
+}
+
+static void
+settings_dialog_free(gpointer data)
+{
+  SettingsDialog *dialog = data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  g_free(dialog);
+}
+
+static void
+archived_dialog_free(gpointer data)
+{
+  ArchivedDialog *dialog = data;
   if (dialog == NULL) {
     return;
   }
@@ -365,6 +443,251 @@ show_rename_dialog(AppState *state, PomodoroTask *task)
 }
 
 static void
+on_settings_window_destroy(GtkWidget *widget, gpointer user_data)
+{
+  (void)widget;
+  SettingsDialog *dialog = user_data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  dialog->suppress_signals = TRUE;
+  g_info("Settings window destroyed");
+  if (dialog->state != NULL) {
+    dialog->state->settings_window = NULL;
+  }
+}
+
+static gboolean
+on_settings_window_close(GtkWindow *window, gpointer user_data)
+{
+  (void)window;
+  SettingsDialog *dialog = user_data;
+  if (dialog != NULL) {
+    dialog->suppress_signals = TRUE;
+    g_info("Settings window close requested");
+  }
+  return FALSE;
+}
+
+static void
+on_archived_window_destroy(GtkWidget *widget, gpointer user_data)
+{
+  (void)widget;
+  AppState *state = user_data;
+  if (state == NULL) {
+    return;
+  }
+
+  g_info("Archived window destroyed");
+  state->archived_window = NULL;
+}
+
+static void
+show_settings_window(AppState *state)
+{
+  if (state == NULL) {
+    return;
+  }
+
+  if (state->settings_window != NULL) {
+    gtk_window_present(state->settings_window);
+    return;
+  }
+
+  GtkApplication *app = gtk_window_get_application(state->window);
+  GtkWidget *window = gtk_application_window_new(app);
+  gtk_window_set_title(GTK_WINDOW(window), "Archive Settings");
+  gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
+  gtk_window_set_modal(GTK_WINDOW(window), TRUE);
+  gtk_window_set_default_size(GTK_WINDOW(window), 420, 320);
+
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(root, 18);
+  gtk_widget_set_margin_bottom(root, 18);
+  gtk_widget_set_margin_start(root, 18);
+  gtk_widget_set_margin_end(root, 18);
+
+  GtkWidget *title = gtk_label_new("Archive rules");
+  gtk_widget_add_css_class(title, "card-title");
+  gtk_widget_set_halign(title, GTK_ALIGN_START);
+
+  GtkWidget *desc =
+      gtk_label_new("Completed tasks archive automatically to keep the list tidy.");
+  gtk_widget_add_css_class(desc, "task-meta");
+  gtk_widget_set_halign(desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(desc), TRUE);
+
+  const char *archive_options[] = {
+      "Archive after N days",
+      "Archive immediately",
+      "Keep latest N completed",
+      NULL};
+
+  GtkWidget *archive_dropdown = gtk_drop_down_new_from_strings(archive_options);
+  gtk_widget_add_css_class(archive_dropdown, "archive-dropdown");
+  gtk_widget_set_hexpand(archive_dropdown, TRUE);
+
+  GtkWidget *archive_days_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *archive_days_label = gtk_label_new("Days to keep");
+  gtk_widget_add_css_class(archive_days_label, "setting-label");
+  gtk_widget_set_halign(archive_days_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(archive_days_label, TRUE);
+  GtkWidget *archive_days_spin = gtk_spin_button_new_with_range(1, 90, 1);
+  gtk_widget_set_halign(archive_days_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(archive_days_row), archive_days_label);
+  gtk_box_append(GTK_BOX(archive_days_row), archive_days_spin);
+
+  GtkWidget *archive_keep_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *archive_keep_label = gtk_label_new("Keep latest");
+  gtk_widget_add_css_class(archive_keep_label, "setting-label");
+  gtk_widget_set_halign(archive_keep_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(archive_keep_label, TRUE);
+  GtkWidget *archive_keep_spin = gtk_spin_button_new_with_range(1, 50, 1);
+  gtk_widget_set_halign(archive_keep_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_label);
+  gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_spin);
+
+  GtkWidget *hint =
+      gtk_label_new("Changes apply immediately and can be adjusted anytime.");
+  gtk_widget_add_css_class(hint, "task-meta");
+  gtk_widget_set_halign(hint, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+
+  gtk_box_append(GTK_BOX(root), title);
+  gtk_box_append(GTK_BOX(root), desc);
+  gtk_box_append(GTK_BOX(root), archive_dropdown);
+  gtk_box_append(GTK_BOX(root), archive_days_row);
+  gtk_box_append(GTK_BOX(root), archive_keep_row);
+  gtk_box_append(GTK_BOX(root), hint);
+
+  gtk_window_set_child(GTK_WINDOW(window), root);
+  state->settings_window = GTK_WINDOW(window);
+
+  SettingsDialog *dialog = g_new0(SettingsDialog, 1);
+  dialog->state = state;
+  dialog->window = GTK_WINDOW(window);
+  dialog->dropdown = archive_dropdown;
+  dialog->days_row = archive_days_row;
+  dialog->keep_row = archive_keep_row;
+  dialog->days_spin = GTK_SPIN_BUTTON(archive_days_spin);
+  dialog->keep_spin = GTK_SPIN_BUTTON(archive_keep_spin);
+
+  g_signal_connect(archive_dropdown,
+                   "notify::selected",
+                   G_CALLBACK(on_settings_strategy_changed),
+                   dialog);
+  g_signal_connect(archive_days_spin,
+                   "value-changed",
+                   G_CALLBACK(on_settings_value_changed),
+                   dialog);
+  g_signal_connect(archive_keep_spin,
+                   "value-changed",
+                   G_CALLBACK(on_settings_value_changed),
+                   dialog);
+
+  g_object_set_data_full(G_OBJECT(window),
+                         "settings-dialog",
+                         dialog,
+                         settings_dialog_free);
+
+  g_signal_connect(window,
+                   "close-request",
+                   G_CALLBACK(on_settings_window_close),
+                   dialog);
+  g_signal_connect(window,
+                   "destroy",
+                   G_CALLBACK(on_settings_window_destroy),
+                   dialog);
+
+  settings_dialog_update_controls(dialog);
+  gtk_window_present(GTK_WINDOW(window));
+}
+
+static void
+show_archived_window(AppState *state)
+{
+  if (state == NULL) {
+    return;
+  }
+
+  if (state->archived_window != NULL) {
+    gtk_window_present(state->archived_window);
+    return;
+  }
+
+  GtkApplication *app = gtk_window_get_application(state->window);
+  GtkWidget *window = gtk_application_window_new(app);
+  gtk_window_set_title(GTK_WINDOW(window), "Archived Tasks");
+  gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
+  gtk_window_set_default_size(GTK_WINDOW(window), 520, 420);
+
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(root, 18);
+  gtk_widget_set_margin_bottom(root, 18);
+  gtk_widget_set_margin_start(root, 18);
+  gtk_widget_set_margin_end(root, 18);
+
+  GtkWidget *title = gtk_label_new("Archived tasks");
+  gtk_widget_add_css_class(title, "card-title");
+  gtk_widget_set_halign(title, GTK_ALIGN_START);
+
+  GtkWidget *desc =
+      gtk_label_new("Restore tasks to bring them back into your active list.");
+  gtk_widget_add_css_class(desc, "task-meta");
+  gtk_widget_set_halign(desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(desc), TRUE);
+
+  GtkWidget *archived_list = gtk_list_box_new();
+  gtk_widget_add_css_class(archived_list, "task-list");
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(archived_list),
+                                  GTK_SELECTION_NONE);
+
+  GtkWidget *archived_scroller = gtk_scrolled_window_new();
+  gtk_widget_add_css_class(archived_scroller, "task-scroller");
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(archived_scroller),
+                                 GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(
+      GTK_SCROLLED_WINDOW(archived_scroller),
+      260);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(archived_scroller),
+                                archived_list);
+
+  GtkWidget *archived_empty_label =
+      gtk_label_new("No archived tasks yet.");
+  gtk_widget_add_css_class(archived_empty_label, "task-empty");
+  gtk_widget_set_halign(archived_empty_label, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(archived_empty_label), TRUE);
+
+  gtk_box_append(GTK_BOX(root), title);
+  gtk_box_append(GTK_BOX(root), desc);
+  gtk_box_append(GTK_BOX(root), archived_scroller);
+  gtk_box_append(GTK_BOX(root), archived_empty_label);
+
+  gtk_window_set_child(GTK_WINDOW(window), root);
+  state->archived_window = GTK_WINDOW(window);
+
+  ArchivedDialog *dialog = g_new0(ArchivedDialog, 1);
+  dialog->window = GTK_WINDOW(window);
+  dialog->list = archived_list;
+  dialog->empty_label = archived_empty_label;
+  g_object_set_data_full(G_OBJECT(window),
+                         "archived-dialog",
+                         dialog,
+                         archived_dialog_free);
+  g_signal_connect(window,
+                   "destroy",
+                   G_CALLBACK(on_archived_window_destroy),
+                   state);
+
+  refresh_task_list(state);
+  gtk_window_present(GTK_WINDOW(window));
+}
+
+static void
 save_task_store(AppState *state)
 {
   if (state == NULL || state->store == NULL) {
@@ -414,6 +737,125 @@ update_current_task_summary(AppState *state)
   }
 }
 
+static GtkWidget *
+build_task_action_menu(AppState *state, PomodoroTask *task)
+{
+  GtkWidget *menu_button = gtk_menu_button_new();
+  gtk_widget_add_css_class(menu_button, "btn-secondary");
+  gtk_widget_add_css_class(menu_button, "btn-compact");
+
+  GtkWidget *label = gtk_label_new("Actions");
+  gtk_menu_button_set_child(GTK_MENU_BUTTON(menu_button), label);
+
+  GtkWidget *popover = gtk_popover_new();
+  gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
+
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_widget_set_margin_top(box, 8);
+  gtk_widget_set_margin_bottom(box, 8);
+  gtk_widget_set_margin_start(box, 8);
+  gtk_widget_set_margin_end(box, 8);
+
+  TaskStatus status = pomodoro_task_get_status(task);
+
+  GtkWidget *edit_button = gtk_button_new_with_label("Edit");
+  gtk_widget_add_css_class(edit_button, "btn-secondary");
+  gtk_widget_add_css_class(edit_button, "btn-compact");
+  g_object_set_data(G_OBJECT(edit_button), "task", task);
+  g_object_set_data(G_OBJECT(edit_button),
+                    "task-action",
+                    GINT_TO_POINTER(TASK_ACTION_EDIT));
+  g_object_set_data(G_OBJECT(edit_button), "popover", popover);
+  g_signal_connect(edit_button,
+                   "clicked",
+                   G_CALLBACK(on_task_action_clicked),
+                   state);
+  gtk_box_append(GTK_BOX(box), edit_button);
+
+  if (status == TASK_STATUS_ACTIVE) {
+    GtkWidget *complete_button = gtk_button_new_with_label("Complete");
+    gtk_widget_add_css_class(complete_button, "btn-secondary");
+    gtk_widget_add_css_class(complete_button, "btn-compact");
+    g_object_set_data(G_OBJECT(complete_button), "task", task);
+    g_object_set_data(G_OBJECT(complete_button),
+                      "task-action",
+                      GINT_TO_POINTER(TASK_ACTION_COMPLETE));
+    g_object_set_data(G_OBJECT(complete_button), "popover", popover);
+    g_signal_connect(complete_button,
+                     "clicked",
+                     G_CALLBACK(on_task_action_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(box), complete_button);
+  }
+
+  if (status == TASK_STATUS_COMPLETED) {
+    GtkWidget *reactivate_button = gtk_button_new_with_label("Reactivate");
+    gtk_widget_add_css_class(reactivate_button, "btn-primary");
+    gtk_widget_add_css_class(reactivate_button, "btn-compact");
+    g_object_set_data(G_OBJECT(reactivate_button), "task", task);
+    g_object_set_data(G_OBJECT(reactivate_button),
+                      "task-action",
+                      GINT_TO_POINTER(TASK_ACTION_REACTIVATE));
+    g_object_set_data(G_OBJECT(reactivate_button), "popover", popover);
+    g_signal_connect(reactivate_button,
+                     "clicked",
+                     G_CALLBACK(on_task_action_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(box), reactivate_button);
+  }
+
+  if (status == TASK_STATUS_ARCHIVED) {
+    GtkWidget *restore_button = gtk_button_new_with_label("Restore");
+    gtk_widget_add_css_class(restore_button, "btn-primary");
+    gtk_widget_add_css_class(restore_button, "btn-compact");
+    g_object_set_data(G_OBJECT(restore_button), "task", task);
+    g_object_set_data(G_OBJECT(restore_button),
+                      "task-action",
+                      GINT_TO_POINTER(TASK_ACTION_REACTIVATE));
+    g_object_set_data(G_OBJECT(restore_button), "popover", popover);
+    g_signal_connect(restore_button,
+                     "clicked",
+                     G_CALLBACK(on_task_action_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(box), restore_button);
+  }
+
+  if (status != TASK_STATUS_ARCHIVED) {
+    GtkWidget *archive_button = gtk_button_new_with_label("Archive");
+    gtk_widget_add_css_class(archive_button, "btn-secondary");
+    gtk_widget_add_css_class(archive_button, "btn-compact");
+    g_object_set_data(G_OBJECT(archive_button), "task", task);
+    g_object_set_data(G_OBJECT(archive_button),
+                      "task-action",
+                      GINT_TO_POINTER(TASK_ACTION_ARCHIVE));
+    g_object_set_data(G_OBJECT(archive_button), "popover", popover);
+    g_signal_connect(archive_button,
+                     "clicked",
+                     G_CALLBACK(on_task_action_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(box), archive_button);
+  }
+
+  GtkWidget *delete_button = gtk_button_new_with_label("Delete");
+  gtk_widget_add_css_class(delete_button, "btn-danger");
+  gtk_widget_add_css_class(delete_button, "btn-compact");
+  g_object_set_data(G_OBJECT(delete_button), "task", task);
+  g_object_set_data(G_OBJECT(delete_button),
+                    "task-action",
+                    GINT_TO_POINTER(TASK_ACTION_DELETE));
+  g_object_set_data(G_OBJECT(delete_button), "popover", popover);
+  g_signal_connect(delete_button,
+                   "clicked",
+                   G_CALLBACK(on_task_action_clicked),
+                   state);
+  gtk_box_append(GTK_BOX(box), delete_button);
+
+  gtk_popover_set_child(GTK_POPOVER(popover), box);
+  gtk_menu_button_set_popover(GTK_MENU_BUTTON(menu_button), popover);
+
+  return menu_button;
+}
+
 static void
 append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
 {
@@ -448,56 +890,11 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
     gtk_widget_add_css_class(status_tag, "tag-muted");
   }
 
-  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-  gtk_widget_set_halign(actions, GTK_ALIGN_END);
-
-  GtkWidget *edit_button = gtk_button_new_with_label("Edit");
-  gtk_widget_add_css_class(edit_button, "btn-secondary");
-  gtk_widget_add_css_class(edit_button, "btn-compact");
-  g_object_set_data(G_OBJECT(edit_button), "task", task);
-  g_object_set_data(G_OBJECT(edit_button),
-                    "task-action",
-                    GINT_TO_POINTER(TASK_ACTION_EDIT));
-  g_signal_connect(edit_button,
-                   "clicked",
-                   G_CALLBACK(on_task_action_clicked),
-                   state);
-
-  GtkWidget *action_button = NULL;
-  TaskAction action = TASK_ACTION_COMPLETE;
-  if (status == TASK_STATUS_ACTIVE) {
-    action_button = gtk_button_new_with_label("Complete");
-    gtk_widget_add_css_class(action_button, "btn-secondary");
-    action = TASK_ACTION_COMPLETE;
-  } else if (status == TASK_STATUS_COMPLETED) {
-    action_button = gtk_button_new_with_label("Reactivate");
-    gtk_widget_add_css_class(action_button, "btn-primary");
-    action = TASK_ACTION_REACTIVATE;
-  } else if (status == TASK_STATUS_ARCHIVED) {
-    action_button = gtk_button_new_with_label("Restore");
-    gtk_widget_add_css_class(action_button, "btn-primary");
-    action = TASK_ACTION_REACTIVATE;
-  }
-
-  if (action_button != NULL) {
-    gtk_widget_add_css_class(action_button, "btn-compact");
-    g_object_set_data(G_OBJECT(action_button), "task", task);
-    g_object_set_data(G_OBJECT(action_button),
-                      "task-action",
-                      GINT_TO_POINTER(action));
-    g_signal_connect(action_button,
-                     "clicked",
-                     G_CALLBACK(on_task_action_clicked),
-                     state);
-  }
+  GtkWidget *actions = build_task_action_menu(state, task);
 
   gtk_box_append(GTK_BOX(row), title);
   gtk_box_append(GTK_BOX(row), status_tag);
   gtk_box_append(GTK_BOX(row), actions);
-  gtk_box_append(GTK_BOX(actions), edit_button);
-  if (action_button != NULL) {
-    gtk_box_append(GTK_BOX(actions), action_button);
-  }
 
   gtk_list_box_append(GTK_LIST_BOX(list), row);
 }
@@ -505,21 +902,16 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
 static void
 refresh_task_list(AppState *state)
 {
-  if (state == NULL || state->task_list == NULL || state->archived_list == NULL) {
+  if (state == NULL || state->task_list == NULL) {
     return;
   }
+
+  ArchivedDialog *archived_dialog = archived_dialog_get(state);
 
   GtkWidget *row = gtk_widget_get_first_child(state->task_list);
   while (row != NULL) {
     GtkWidget *next = gtk_widget_get_next_sibling(row);
     gtk_list_box_remove(GTK_LIST_BOX(state->task_list), row);
-    row = next;
-  }
-
-  row = gtk_widget_get_first_child(state->archived_list);
-  while (row != NULL) {
-    GtkWidget *next = gtk_widget_get_next_sibling(row);
-    gtk_list_box_remove(GTK_LIST_BOX(state->archived_list), row);
     row = next;
   }
 
@@ -545,12 +937,21 @@ refresh_task_list(AppState *state)
       }
     }
 
-    for (guint i = 0; i < tasks->len; i++) {
-      PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
-      if (task != NULL &&
-          pomodoro_task_get_status(task) == TASK_STATUS_ARCHIVED) {
-        append_task_row(state, state->archived_list, task);
-        archived_count++;
+    if (archived_dialog != NULL && archived_dialog->list != NULL) {
+      row = gtk_widget_get_first_child(archived_dialog->list);
+      while (row != NULL) {
+        GtkWidget *next = gtk_widget_get_next_sibling(row);
+        gtk_list_box_remove(GTK_LIST_BOX(archived_dialog->list), row);
+        row = next;
+      }
+
+      for (guint i = 0; i < tasks->len; i++) {
+        PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
+        if (task != NULL &&
+            pomodoro_task_get_status(task) == TASK_STATUS_ARCHIVED) {
+          append_task_row(state, archived_dialog->list, task);
+          archived_count++;
+        }
       }
     }
   }
@@ -558,25 +959,26 @@ refresh_task_list(AppState *state)
   if (state->task_empty_label != NULL) {
     gtk_widget_set_visible(state->task_empty_label, visible_count == 0);
   }
-  if (state->archived_empty_label != NULL) {
-    gtk_widget_set_visible(state->archived_empty_label, archived_count == 0);
+  if (archived_dialog != NULL && archived_dialog->empty_label != NULL) {
+    gtk_widget_set_visible(archived_dialog->empty_label, archived_count == 0);
   }
 
   update_current_task_summary(state);
 }
 
 static void
-update_archive_controls(AppState *state)
+settings_dialog_update_controls(SettingsDialog *dialog)
 {
-  if (state == NULL) {
+  if (dialog == NULL || dialog->state == NULL) {
     return;
   }
 
-  state->suppress_archive_signals = TRUE;
+  dialog->suppress_signals = TRUE;
 
-  TaskArchiveStrategy strategy = task_store_get_archive_strategy(state->store);
+  TaskArchiveStrategy strategy =
+      task_store_get_archive_strategy(dialog->state->store);
 
-  if (state->archive_dropdown != NULL) {
+  if (dialog->dropdown != NULL) {
     guint selected = 0;
     switch (strategy.type) {
       case TASK_ARCHIVE_AFTER_DAYS:
@@ -589,41 +991,42 @@ update_archive_controls(AppState *state)
         selected = 2;
         break;
     }
-    gtk_drop_down_set_selected(GTK_DROP_DOWN(state->archive_dropdown), selected);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(dialog->dropdown), selected);
   }
 
-  if (state->archive_days_spin != NULL) {
-    gtk_spin_button_set_value(state->archive_days_spin, (gdouble)strategy.days);
+  if (dialog->days_spin != NULL) {
+    gtk_spin_button_set_value(dialog->days_spin, (gdouble)strategy.days);
   }
-  if (state->archive_keep_spin != NULL) {
-    gtk_spin_button_set_value(state->archive_keep_spin,
+  if (dialog->keep_spin != NULL) {
+    gtk_spin_button_set_value(dialog->keep_spin,
                               (gdouble)strategy.keep_latest);
   }
 
-  if (state->archive_days_row != NULL) {
-    gtk_widget_set_visible(state->archive_days_row,
+  if (dialog->days_row != NULL) {
+    gtk_widget_set_visible(dialog->days_row,
                            strategy.type == TASK_ARCHIVE_AFTER_DAYS);
   }
-  if (state->archive_keep_row != NULL) {
-    gtk_widget_set_visible(state->archive_keep_row,
+  if (dialog->keep_row != NULL) {
+    gtk_widget_set_visible(dialog->keep_row,
                            strategy.type == TASK_ARCHIVE_KEEP_LATEST);
   }
 
-  state->suppress_archive_signals = FALSE;
+  dialog->suppress_signals = FALSE;
 }
 
 static void
-apply_archive_settings(AppState *state)
+settings_dialog_apply(SettingsDialog *dialog)
 {
-  if (state == NULL || state->store == NULL) {
+  if (dialog == NULL || dialog->state == NULL || dialog->state->store == NULL) {
     return;
   }
 
-  TaskArchiveStrategy strategy = task_store_get_archive_strategy(state->store);
+  TaskArchiveStrategy strategy =
+      task_store_get_archive_strategy(dialog->state->store);
 
-  if (state->archive_dropdown != NULL) {
+  if (dialog->dropdown != NULL) {
     guint selected =
-        gtk_drop_down_get_selected(GTK_DROP_DOWN(state->archive_dropdown));
+        gtk_drop_down_get_selected(GTK_DROP_DOWN(dialog->dropdown));
     if (selected == 1) {
       strategy.type = TASK_ARCHIVE_IMMEDIATE;
     } else if (selected == 2) {
@@ -633,20 +1036,19 @@ apply_archive_settings(AppState *state)
     }
   }
 
-  if (state->archive_days_spin != NULL) {
-    strategy.days = (guint)gtk_spin_button_get_value_as_int(
-        state->archive_days_spin);
+  if (dialog->days_spin != NULL) {
+    strategy.days = (guint)gtk_spin_button_get_value_as_int(dialog->days_spin);
   }
-  if (state->archive_keep_spin != NULL) {
-    strategy.keep_latest = (guint)gtk_spin_button_get_value_as_int(
-        state->archive_keep_spin);
+  if (dialog->keep_spin != NULL) {
+    strategy.keep_latest =
+        (guint)gtk_spin_button_get_value_as_int(dialog->keep_spin);
   }
 
-  task_store_set_archive_strategy(state->store, strategy);
-  task_store_apply_archive_policy(state->store);
-  save_task_store(state);
-  refresh_task_list(state);
-  update_archive_controls(state);
+  task_store_set_archive_strategy(dialog->state->store, strategy);
+  task_store_apply_archive_policy(dialog->state->store);
+  save_task_store(dialog->state);
+  refresh_task_list(dialog->state);
+  settings_dialog_update_controls(dialog);
 }
 
 static void
@@ -703,9 +1105,14 @@ on_task_action_clicked(GtkButton *button, gpointer user_data)
   PomodoroTask *task = g_object_get_data(G_OBJECT(button), "task");
   TaskAction action =
       GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "task-action"));
+  GtkWidget *popover = g_object_get_data(G_OBJECT(button), "popover");
 
   if (task == NULL) {
     return;
+  }
+
+  if (popover != NULL) {
+    gtk_popover_popdown(GTK_POPOVER(popover));
   }
 
   if (action == TASK_ACTION_EDIT) {
@@ -713,7 +1120,16 @@ on_task_action_clicked(GtkButton *button, gpointer user_data)
     return;
   }
 
-  if (action == TASK_ACTION_REACTIVATE) {
+  if (action == TASK_ACTION_DELETE) {
+    task_store_remove(state->store, task);
+    save_task_store(state);
+    refresh_task_list(state);
+    return;
+  }
+
+  if (action == TASK_ACTION_ARCHIVE) {
+    task_store_archive_task(state->store, task);
+  } else if (action == TASK_ACTION_REACTIVATE) {
     task_store_reactivate(state->store, task);
   } else {
     task_store_complete(state->store, task);
@@ -725,30 +1141,54 @@ on_task_action_clicked(GtkButton *button, gpointer user_data)
 }
 
 static void
-on_archive_strategy_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
+on_settings_strategy_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
   (void)object;
   (void)pspec;
 
-  AppState *state = user_data;
-  if (state == NULL || state->suppress_archive_signals) {
+  SettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->suppress_signals) {
     return;
   }
 
-  apply_archive_settings(state);
+  settings_dialog_apply(dialog);
 }
 
 static void
-on_archive_value_changed(GtkSpinButton *spin, gpointer user_data)
+on_settings_value_changed(GtkSpinButton *spin, gpointer user_data)
 {
   (void)spin;
 
-  AppState *state = user_data;
-  if (state == NULL || state->suppress_archive_signals) {
+  SettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->suppress_signals) {
     return;
   }
 
-  apply_archive_settings(state);
+  settings_dialog_apply(dialog);
+}
+
+static ArchivedDialog *
+archived_dialog_get(AppState *state)
+{
+  if (state == NULL || state->archived_window == NULL) {
+    return NULL;
+  }
+
+  return g_object_get_data(G_OBJECT(state->archived_window), "archived-dialog");
+}
+
+static void
+on_show_settings_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  show_settings_window((AppState *)user_data);
+}
+
+static void
+on_show_archived_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  show_archived_window((AppState *)user_data);
 }
 
 static void
@@ -802,6 +1242,29 @@ on_activate(GtkApplication *app, gpointer user_data)
   gtk_box_append(GTK_BOX(header), title);
   gtk_box_append(GTK_BOX(header), subtitle);
   gtk_box_append(GTK_BOX(root), header);
+
+  GtkWidget *action_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_set_halign(action_row, GTK_ALIGN_START);
+
+  GtkWidget *settings_button = gtk_button_new_with_label("Archive Settings");
+  gtk_widget_add_css_class(settings_button, "btn-secondary");
+  gtk_widget_add_css_class(settings_button, "btn-compact");
+  g_signal_connect(settings_button,
+                   "clicked",
+                   G_CALLBACK(on_show_settings_clicked),
+                   state);
+
+  GtkWidget *archived_button = gtk_button_new_with_label("Archived Tasks");
+  gtk_widget_add_css_class(archived_button, "btn-secondary");
+  gtk_widget_add_css_class(archived_button, "btn-compact");
+  g_signal_connect(archived_button,
+                   "clicked",
+                   G_CALLBACK(on_show_archived_clicked),
+                   state);
+
+  gtk_box_append(GTK_BOX(action_row), settings_button);
+  gtk_box_append(GTK_BOX(action_row), archived_button);
+  gtk_box_append(GTK_BOX(root), action_row);
 
   GtkWidget *hero = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 18);
   gtk_widget_set_hexpand(hero, TRUE);
@@ -954,132 +1417,17 @@ on_activate(GtkApplication *app, gpointer user_data)
   gtk_label_set_wrap(GTK_LABEL(task_empty_label), TRUE);
   state->task_empty_label = task_empty_label;
 
-  GtkWidget *archived_expander = gtk_expander_new("Archived tasks");
-  gtk_widget_add_css_class(archived_expander, "archive-expander");
-  gtk_expander_set_expanded(GTK_EXPANDER(archived_expander), FALSE);
-
-  GtkWidget *archived_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-
-  GtkWidget *archived_list = gtk_list_box_new();
-  gtk_widget_add_css_class(archived_list, "task-list");
-  gtk_list_box_set_selection_mode(GTK_LIST_BOX(archived_list),
-                                  GTK_SELECTION_NONE);
-  state->archived_list = archived_list;
-
-  GtkWidget *archived_scroller = gtk_scrolled_window_new();
-  gtk_widget_add_css_class(archived_scroller, "task-scroller");
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(archived_scroller),
-                                 GTK_POLICY_NEVER,
-                                 GTK_POLICY_AUTOMATIC);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(archived_scroller),
-                                archived_list);
-  gtk_scrolled_window_set_min_content_height(
-      GTK_SCROLLED_WINDOW(archived_scroller),
-      160);
-
-  GtkWidget *archived_empty_label =
-      gtk_label_new("No archived tasks yet.");
-  gtk_widget_add_css_class(archived_empty_label, "task-empty");
-  gtk_widget_set_halign(archived_empty_label, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(archived_empty_label), TRUE);
-  state->archived_empty_label = archived_empty_label;
-
-  gtk_box_append(GTK_BOX(archived_box), archived_scroller);
-  gtk_box_append(GTK_BOX(archived_box), archived_empty_label);
-  gtk_expander_set_child(GTK_EXPANDER(archived_expander), archived_box);
-
   gtk_box_append(GTK_BOX(tasks_card), tasks_title);
   gtk_box_append(GTK_BOX(tasks_card), task_input_row);
   gtk_box_append(GTK_BOX(tasks_card), task_scroller);
   gtk_box_append(GTK_BOX(tasks_card), task_empty_label);
-  gtk_box_append(GTK_BOX(tasks_card), archived_expander);
-
-  GtkWidget *settings_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_add_css_class(settings_card, "card");
-
-  GtkWidget *settings_title = gtk_label_new("Archive Rules");
-  gtk_widget_add_css_class(settings_title, "card-title");
-  gtk_widget_set_halign(settings_title, GTK_ALIGN_START);
-
-  GtkWidget *settings_desc =
-      gtk_label_new("Completed tasks archive automatically to keep the list tidy.");
-  gtk_widget_add_css_class(settings_desc, "task-meta");
-  gtk_widget_set_halign(settings_desc, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(settings_desc), TRUE);
-
-  GtkStringList *archive_options = gtk_string_list_new(NULL);
-  gtk_string_list_append(archive_options, "Archive after N days");
-  gtk_string_list_append(archive_options, "Archive immediately");
-  gtk_string_list_append(archive_options, "Keep latest N completed");
-
-  GtkWidget *archive_dropdown =
-      gtk_drop_down_new(G_LIST_MODEL(archive_options), NULL);
-  g_object_unref(archive_options);
-  gtk_widget_add_css_class(archive_dropdown, "archive-dropdown");
-  gtk_widget_set_hexpand(archive_dropdown, TRUE);
-  g_signal_connect(archive_dropdown,
-                   "notify::selected",
-                   G_CALLBACK(on_archive_strategy_changed),
-                   state);
-  state->archive_dropdown = archive_dropdown;
-
-  GtkWidget *archive_days_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-  GtkWidget *archive_days_label = gtk_label_new("Days to keep");
-  gtk_widget_add_css_class(archive_days_label, "setting-label");
-  gtk_widget_set_halign(archive_days_label, GTK_ALIGN_START);
-  gtk_widget_set_hexpand(archive_days_label, TRUE);
-  GtkWidget *archive_days_spin =
-      gtk_spin_button_new_with_range(1, 90, 1);
-  gtk_widget_set_halign(archive_days_spin, GTK_ALIGN_END);
-  g_signal_connect(archive_days_spin,
-                   "value-changed",
-                   G_CALLBACK(on_archive_value_changed),
-                   state);
-  state->archive_days_spin = GTK_SPIN_BUTTON(archive_days_spin);
-  state->archive_days_row = archive_days_row;
-
-  gtk_box_append(GTK_BOX(archive_days_row), archive_days_label);
-  gtk_box_append(GTK_BOX(archive_days_row), archive_days_spin);
-
-  GtkWidget *archive_keep_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-  GtkWidget *archive_keep_label = gtk_label_new("Keep latest");
-  gtk_widget_add_css_class(archive_keep_label, "setting-label");
-  gtk_widget_set_halign(archive_keep_label, GTK_ALIGN_START);
-  gtk_widget_set_hexpand(archive_keep_label, TRUE);
-  GtkWidget *archive_keep_spin =
-      gtk_spin_button_new_with_range(1, 50, 1);
-  gtk_widget_set_halign(archive_keep_spin, GTK_ALIGN_END);
-  g_signal_connect(archive_keep_spin,
-                   "value-changed",
-                   G_CALLBACK(on_archive_value_changed),
-                   state);
-  state->archive_keep_spin = GTK_SPIN_BUTTON(archive_keep_spin);
-  state->archive_keep_row = archive_keep_row;
-
-  gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_label);
-  gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_spin);
-
-  GtkWidget *archive_hint =
-      gtk_label_new("Changes apply immediately and can be adjusted anytime.");
-  gtk_widget_add_css_class(archive_hint, "task-meta");
-  gtk_widget_set_halign(archive_hint, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(archive_hint), TRUE);
-
-  gtk_box_append(GTK_BOX(settings_card), settings_title);
-  gtk_box_append(GTK_BOX(settings_card), settings_desc);
-  gtk_box_append(GTK_BOX(settings_card), archive_dropdown);
-  gtk_box_append(GTK_BOX(settings_card), archive_days_row);
-  gtk_box_append(GTK_BOX(settings_card), archive_keep_row);
-  gtk_box_append(GTK_BOX(settings_card), archive_hint);
 
   gtk_box_append(GTK_BOX(task_section), tasks_card);
-  gtk_box_append(GTK_BOX(task_section), settings_card);
   gtk_box_append(GTK_BOX(root), task_section);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
   gtk_window_present(GTK_WINDOW(window));
 
-  update_archive_controls(state);
   refresh_task_list(state);
 
   g_info("Main window presented");
@@ -1089,6 +1437,7 @@ int
 main(int argc, char *argv[])
 {
   install_logging();
+  install_crash_handler();
   install_resources();
 
   g_set_application_name(APP_NAME);

@@ -42,6 +42,7 @@ PomodoroTask *task_store_find_by_id(TaskStore *store, const char *id);
 void task_store_complete(TaskStore *store, PomodoroTask *task);
 void task_store_reactivate(TaskStore *store, PomodoroTask *task);
 void task_store_archive_task(TaskStore *store, PomodoroTask *task);
+gboolean task_store_remove(TaskStore *store, PomodoroTask *task);
 
 void task_store_set_archive_strategy(TaskStore *store, TaskArchiveStrategy strategy);
 TaskArchiveStrategy task_store_get_archive_strategy(TaskStore *store);

@@ -209,6 +209,16 @@ task_store_archive_task(TaskStore *store, PomodoroTask *task)
   task->archived_at = g_date_time_new_now_local();
 }
 
+gboolean
+task_store_remove(TaskStore *store, PomodoroTask *task)
+{
+  if (store == NULL || task == NULL) {
+    return FALSE;
+  }
+
+  return g_ptr_array_remove(store->tasks, task);
+}
+
 void
 task_store_set_archive_strategy(TaskStore *store, TaskArchiveStrategy strategy)
 {

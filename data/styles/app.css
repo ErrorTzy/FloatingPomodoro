@@ -143,6 +143,23 @@ button.btn-compact {
   font-size: 12px;
 }
 
+button.btn-danger {
+  background-color: transparent;
+  background-image: none;
+  color: @pomodoro_error;
+  border: 1px solid @pomodoro_error;
+  border-image: none;
+  border-radius: 999px;
+  box-shadow: none;
+  padding: 6px 12px;
+  text-shadow: none;
+  font-weight: 600;
+}
+
+button.btn-danger:hover {
+  background-color: rgba(215, 38, 61, 0.1);
+}
+
 button.btn-primary:focus-visible,
 button.btn-secondary:focus-visible {
   box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
@@ -154,6 +171,56 @@ button.btn-primary label {
 
 button.btn-secondary label {
   color: @pomodoro_primary;
+}
+
+button.btn-danger label {
+  color: @pomodoro_error;
+}
+
+menubutton.btn-secondary > button,
+menubutton.btn-primary > button,
+menubutton.btn-danger > button {
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: none;
+  padding: 6px 12px;
+  text-shadow: none;
+  font-weight: 600;
+}
+
+menubutton.btn-secondary > button {
+  background-color: transparent;
+  border-color: @pomodoro_primary;
+  color: @pomodoro_primary;
+}
+
+menubutton.btn-secondary > button:hover {
+  background-color: @pomodoro_surface_alt;
+}
+
+menubutton.btn-secondary > button label {
+  color: @pomodoro_primary;
+}
+
+menubutton.btn-primary > button {
+  background-color: @pomodoro_primary;
+  border-color: @pomodoro_primary;
+  color: #ffffff;
+}
+
+menubutton.btn-primary > button label {
+  color: #ffffff;
+}
+
+menubutton.btn-danger > button {
+  background-color: transparent;
+  border-color: @pomodoro_error;
+  color: @pomodoro_error;
+}
+
+menubutton.btn-danger > button label {
+  color: @pomodoro_error;
 }
 
 label.section-title {

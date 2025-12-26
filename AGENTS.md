@@ -123,6 +123,12 @@ Notes:
 - Logging must be structured and quiet by default.
 - UI thread must never block (especially during Ollama calls).
 - Error handling: fail gracefully and notify the user where applicable.
+- UI ownership & lifetime guardrails:
+  - Store only top-level windows (or other long-lived widgets) in shared app state.
+  - Per-window widgets live inside a window-scoped struct owned by that window and stored via `g_object_set_data_full`.
+  - Avoid holding pointers to child widgets across windows; pass data, not widgets.
+  - Prefer GTK helpers that manage model ownership (e.g., `gtk_drop_down_new_from_strings`) and avoid manual ref/unref unless you clearly own the object.
+  - Signals should use window-scoped user data so teardown can’t touch stale pointers.
 
 ### Power/Battery Guidelines
 - Timer tick at 1 Hz; avoid higher frequency animations.
