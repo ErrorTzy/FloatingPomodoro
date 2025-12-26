@@ -66,6 +66,36 @@ overlay_window_sync_toggle_icon(AppState *state)
   tray_item_update(state);
 }
 
+void
+overlay_window_set_warning(AppState *state, gboolean active, const char *text)
+{
+  OverlayWindow *overlay = overlay_from_state(state);
+  if (overlay == NULL || overlay->root == NULL) {
+    return;
+  }
+
+  overlay->warning_active = active;
+
+  if (active) {
+    gtk_widget_add_css_class(overlay->root, "overlay-warning");
+    if (overlay->warning_label != NULL) {
+      const char *message = text != NULL ? text : "Stay focused";
+      gtk_label_set_text(GTK_LABEL(overlay->warning_label), message);
+      gtk_widget_set_visible(overlay->warning_label, TRUE);
+    }
+  } else {
+    gtk_widget_remove_css_class(overlay->root, "overlay-warning");
+    if (overlay->warning_label != NULL) {
+      gtk_label_set_text(GTK_LABEL(overlay->warning_label), "");
+      gtk_widget_set_visible(overlay->warning_label, FALSE);
+    }
+  }
+
+  if (overlay->drawing_area != NULL) {
+    gtk_widget_queue_draw(overlay->drawing_area);
+  }
+}
+
 static char *
 overlay_window_format_timer_value(gint64 seconds)
 {
@@ -184,6 +214,7 @@ overlay_window_create(GtkApplication *app, AppState *state)
   overlay->phase = POMODORO_PHASE_FOCUS;
   overlay->timer_state = POMODORO_TIMER_STOPPED;
   overlay->progress = 0.0;
+  overlay->warning_active = FALSE;
 
   g_object_set_data_full(G_OBJECT(window),
                          "overlay-window",

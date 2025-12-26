@@ -388,6 +388,30 @@ label.stat-label {
   color: @pomodoro_text_muted;
 }
 
+listbox.focus-guard-list {
+  background-color: transparent;
+}
+
+listbox.focus-guard-list > row {
+  padding: 4px 0;
+}
+
+label.focus-guard-app {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+label.focus-guard-time {
+  font-size: 12px;
+  font-weight: 600;
+  color: @pomodoro_text_muted;
+}
+
+label.focus-guard-empty {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+}
+
 entry.task-entry {
   background-color: @pomodoro_surface;
   border-radius: 12px;
@@ -490,6 +514,19 @@ window.overlay-window {
   color: @pomodoro_text_muted;
 }
 
+.overlay-root.overlay-warning label.overlay-time {
+  color: @pomodoro_error;
+}
+
+.overlay-root.overlay-warning label.overlay-phase {
+  color: rgba(215, 38, 61, 0.7);
+}
+
+.overlay-root.overlay-warning .overlay-bubble {
+  border-radius: 999px;
+  animation: overlay-warning-pulse 1.6s ease-in-out infinite;
+}
+
 .overlay-bubble {
   background-color: transparent;
 }
@@ -506,6 +543,14 @@ label.overlay-phase {
   letter-spacing: 1.1px;
   text-transform: uppercase;
   color: @pomodoro_text_muted;
+}
+
+label.overlay-warning-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: @pomodoro_error;
 }
 
 .overlay-panel {
@@ -618,4 +663,19 @@ button.overlay-menu-text.overlay-menu-danger {
 button.overlay-menu-text.overlay-menu-danger:hover {
   background-color: rgba(215, 38, 61, 0.12);
   color: @pomodoro_error;
+}
+
+@keyframes overlay-warning-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(215, 38, 61, 0.08),
+                0 0 12px rgba(215, 38, 61, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(215, 38, 61, 0.16),
+                0 0 18px rgba(215, 38, 61, 0.28);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(215, 38, 61, 0.08),
+                0 0 12px rgba(215, 38, 61, 0.2);
+  }
 }

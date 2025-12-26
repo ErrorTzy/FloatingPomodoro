@@ -32,6 +32,11 @@ overlay_window_draw(GtkDrawingArea *area,
   GdkRGBA ring_break = {0.89, 0.39, 0.08, 0.95};
   GdkRGBA ring_long_break = {0.24, 0.51, 0.38, 0.95};
   GdkRGBA ring_paused = {0.36, 0.36, 0.36, 0.65};
+  GdkRGBA ring_warning = {0.84, 0.15, 0.24, 0.95};
+
+  if (overlay->warning_active) {
+    ring_track = (GdkRGBA){0.84, 0.15, 0.24, 0.22};
+  }
 
   cairo_save(cr);
   cairo_arc(cr, cx, cy, radius, 0, 2 * G_PI);
@@ -69,8 +74,10 @@ overlay_window_draw(GtkDrawingArea *area,
 
   if (overlay->progress > 0.001) {
     GdkRGBA ring_color = ring_focus;
-    if (overlay->timer_state == POMODORO_TIMER_PAUSED ||
-        overlay->timer_state == POMODORO_TIMER_STOPPED) {
+    if (overlay->warning_active) {
+      ring_color = ring_warning;
+    } else if (overlay->timer_state == POMODORO_TIMER_PAUSED ||
+               overlay->timer_state == POMODORO_TIMER_STOPPED) {
       ring_color = ring_paused;
     } else if (overlay->phase == POMODORO_PHASE_SHORT_BREAK) {
       ring_color = ring_break;

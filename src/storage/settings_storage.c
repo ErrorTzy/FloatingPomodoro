@@ -179,6 +179,140 @@ settings_storage_save_timer(const PomodoroTimerConfig *config, GError **error)
 }
 
 gboolean
+settings_storage_load_focus_guard(FocusGuardConfig *config, GError **error)
+{
+  if (config == NULL) {
+    g_set_error(error,
+                G_FILE_ERROR,
+                G_FILE_ERROR_INVAL,
+                "Focus guard config is NULL");
+    return FALSE;
+  }
+
+  *config = focus_guard_config_default();
+
+  char *path = settings_storage_get_path();
+  if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
+    g_free(path);
+    return TRUE;
+  }
+
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
+    g_free(path);
+    return FALSE;
+  }
+
+  if (g_key_file_has_key(key_file, "focus_guard", "warnings_enabled", NULL)) {
+    config->warnings_enabled =
+        g_key_file_get_boolean(key_file,
+                               "focus_guard",
+                               "warnings_enabled",
+                               NULL);
+  }
+
+  if (g_key_file_has_key(key_file, "focus_guard", "interval_seconds", NULL)) {
+    gint value = g_key_file_get_integer(key_file,
+                                        "focus_guard",
+                                        "interval_seconds",
+                                        NULL);
+    if (value > 0) {
+      config->detection_interval_seconds = (guint)value;
+    }
+  }
+
+  if (g_key_file_has_key(key_file, "focus_guard", "blacklist", NULL)) {
+    gsize length = 0;
+    gchar **list = g_key_file_get_string_list(key_file,
+                                              "focus_guard",
+                                              "blacklist",
+                                              &length,
+                                              NULL);
+    if (list != NULL) {
+      g_strfreev(config->blacklist);
+      config->blacklist = list;
+    }
+  }
+
+  focus_guard_config_normalize(config);
+
+  g_key_file_free(key_file);
+  g_free(path);
+  return TRUE;
+}
+
+gboolean
+settings_storage_save_focus_guard(const FocusGuardConfig *config,
+                                  GError **error)
+{
+  if (config == NULL) {
+    g_set_error(error,
+                G_FILE_ERROR,
+                G_FILE_ERROR_INVAL,
+                "Focus guard config is NULL");
+    return FALSE;
+  }
+
+  FocusGuardConfig normalized = focus_guard_config_copy(config);
+  focus_guard_config_normalize(&normalized);
+
+  char *path = settings_storage_get_path();
+  if (!settings_storage_ensure_dir(path, error)) {
+    g_free(path);
+    focus_guard_config_clear(&normalized);
+    return FALSE;
+  }
+
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
+    g_free(path);
+    focus_guard_config_clear(&normalized);
+    return FALSE;
+  }
+
+  g_key_file_set_boolean(key_file,
+                         "focus_guard",
+                         "warnings_enabled",
+                         normalized.warnings_enabled);
+  g_key_file_set_integer(key_file,
+                         "focus_guard",
+                         "interval_seconds",
+                         (gint)normalized.detection_interval_seconds);
+
+  if (normalized.blacklist != NULL) {
+    gsize length = g_strv_length(normalized.blacklist);
+    g_key_file_set_string_list(key_file,
+                               "focus_guard",
+                               "blacklist",
+                               (const gchar *const *)normalized.blacklist,
+                               length);
+  } else {
+    g_key_file_set_string_list(key_file,
+                               "focus_guard",
+                               "blacklist",
+                               NULL,
+                               0);
+  }
+
+  gsize length = 0;
+  gchar *data = g_key_file_to_data(key_file, &length, error);
+  if (data == NULL) {
+    g_key_file_free(key_file);
+    g_free(path);
+    focus_guard_config_clear(&normalized);
+    return FALSE;
+  }
+
+  gboolean result = g_file_set_contents(path, data, length, error);
+
+  g_free(data);
+  g_key_file_free(key_file);
+  g_free(path);
+  focus_guard_config_clear(&normalized);
+  return result;
+}
+
+gboolean
 settings_storage_load_app(AppSettings *settings, GError **error)
 {
   if (settings == NULL) {

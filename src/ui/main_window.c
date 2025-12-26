@@ -3,6 +3,7 @@
 #include "app/app_state.h"
 #include "core/pomodoro_timer.h"
 #include "core/task_store.h"
+#include "focus/focus_guard.h"
 #include "overlay/overlay_window.h"
 #include "storage/settings_storage.h"
 #include "storage/task_storage.h"
@@ -368,6 +369,14 @@ main_window_present(GtkApplication *app)
                                      state);
 
   overlay_window_create(app, state);
+  FocusGuardConfig guard_config = focus_guard_config_default();
+  if (!settings_storage_load_focus_guard(&guard_config, &error)) {
+    g_warning("Failed to load focus guard settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+  state->focus_guard = focus_guard_create(state, guard_config);
+  focus_guard_config_clear(&guard_config);
   tray_item_create(app, state);
   g_signal_connect(window,
                    "close-request",
@@ -706,7 +715,50 @@ main_window_present(GtkApplication *app)
   gtk_box_append(GTK_BOX(tasks_card), task_scroller);
   gtk_box_append(GTK_BOX(tasks_card), task_empty_label);
 
+  GtkWidget *focus_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_add_css_class(focus_card, "card");
+  gtk_widget_set_size_request(focus_card, 240, -1);
+  gtk_widget_set_valign(focus_card, GTK_ALIGN_START);
+
+  GtkWidget *focus_title = gtk_label_new("Focus guard");
+  gtk_widget_add_css_class(focus_title, "card-title");
+  gtk_widget_set_halign(focus_title, GTK_ALIGN_START);
+
+  GtkWidget *focus_desc =
+      gtk_label_new("App usage during focus sessions.");
+  gtk_widget_add_css_class(focus_desc, "task-meta");
+  gtk_widget_set_halign(focus_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(focus_desc), TRUE);
+
+  GtkWidget *focus_list = gtk_list_box_new();
+  gtk_widget_add_css_class(focus_list, "focus-guard-list");
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(focus_list),
+                                  GTK_SELECTION_NONE);
+  state->focus_stats_list = focus_list;
+
+  GtkWidget *focus_scroller = gtk_scrolled_window_new();
+  gtk_widget_add_css_class(focus_scroller, "task-scroller");
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(focus_scroller),
+                                 GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(
+      GTK_SCROLLED_WINDOW(focus_scroller),
+      160);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(focus_scroller), focus_list);
+
+  GtkWidget *focus_empty_label = gtk_label_new("No app activity yet.");
+  gtk_widget_add_css_class(focus_empty_label, "focus-guard-empty");
+  gtk_widget_set_halign(focus_empty_label, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(focus_empty_label), TRUE);
+  state->focus_stats_empty_label = focus_empty_label;
+
+  gtk_box_append(GTK_BOX(focus_card), focus_title);
+  gtk_box_append(GTK_BOX(focus_card), focus_desc);
+  gtk_box_append(GTK_BOX(focus_card), focus_scroller);
+  gtk_box_append(GTK_BOX(focus_card), focus_empty_label);
+
   gtk_box_append(GTK_BOX(task_section), tasks_card);
+  gtk_box_append(GTK_BOX(task_section), focus_card);
   gtk_box_append(GTK_BOX(root), task_section);
 
   gtk_window_set_child(GTK_WINDOW(window), root);

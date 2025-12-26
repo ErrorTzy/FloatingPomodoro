@@ -1,6 +1,7 @@
 #include "app/app_state.h"
 
 #include "core/pomodoro_timer.h"
+#include "focus/focus_guard.h"
 #include "tray/tray_item.h"
 #include "ui/dialogs.h"
 
@@ -28,6 +29,9 @@ app_state_free(gpointer data)
   dialogs_cleanup_archived(state);
 
   tray_item_destroy(state);
+
+  focus_guard_destroy(state->focus_guard);
+  state->focus_guard = NULL;
 
   if (state->overlay_window != NULL) {
     gtk_window_destroy(state->overlay_window);

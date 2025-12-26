@@ -16,6 +16,7 @@ struct _OverlayWindow {
   GtkWidget *drawing_area;
   GtkWidget *time_label;
   GtkWidget *phase_label;
+  GtkWidget *warning_label;
   GtkWidget *info_revealer;
   GtkWidget *current_task_label;
   GtkWidget *next_task_label;
@@ -33,6 +34,7 @@ struct _OverlayWindow {
   gdouble opacity;
   PomodoroPhase phase;
   PomodoroTimerState timer_state;
+  gboolean warning_active;
 };
 
 GtkWindow *overlay_window_create_window(GtkApplication *app);

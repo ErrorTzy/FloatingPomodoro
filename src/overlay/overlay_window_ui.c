@@ -120,8 +120,16 @@ overlay_window_build_ui(OverlayWindow *overlay)
   gtk_widget_set_halign(phase_label, GTK_ALIGN_CENTER);
   overlay->phase_label = phase_label;
 
+  GtkWidget *warning_label = gtk_label_new("");
+  gtk_widget_add_css_class(warning_label, "overlay-warning-label");
+  gtk_widget_set_halign(warning_label, GTK_ALIGN_CENTER);
+  gtk_label_set_wrap(GTK_LABEL(warning_label), TRUE);
+  gtk_widget_set_visible(warning_label, FALSE);
+  overlay->warning_label = warning_label;
+
   gtk_box_append(GTK_BOX(label_box), time_label);
   gtk_box_append(GTK_BOX(label_box), phase_label);
+  gtk_box_append(GTK_BOX(label_box), warning_label);
   gtk_overlay_add_overlay(GTK_OVERLAY(bubble), label_box);
 
   GtkWidget *revealer = gtk_revealer_new();
