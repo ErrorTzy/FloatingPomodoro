@@ -175,12 +175,6 @@ THE MOST IMPORTANT RULE IS: Separation of Concern!
 - For focus guard: verify repeated warnings and stats logging.
 - For Chrome/Ollama: verify “no debug port” gracefully and “model list refresh” behavior.
 
-### PR merge checklist (quick)
-- Build succeeds (`ninja -C build`).
-- App launches without warnings or GTK assertions.
-- Task list renders and actions respond (edit/archive/restore/delete).
-- Visual styling matches the CSS system (no default GTK look).
-
 ### UI resources (GTK4)
 - Register resources in `data/resources.gresource.xml` and rebuild so they compile into the binary.
 - Themed icons live under `data/icons/scalable/actions/` (do not include `hicolor` in the resource path).
