@@ -5,9 +5,11 @@
 #include "core/task_store.h"
 
 typedef struct _TaskRowControls TaskRowControls;
+typedef struct _PomodoroTimer PomodoroTimer;
 
 typedef struct {
   TaskStore *store;
+  PomodoroTimer *timer;
   GtkWindow *window;
   GtkWindow *settings_window;
   GtkWindow *archived_window;
@@ -19,6 +21,13 @@ typedef struct {
   GtkWidget *task_repeat_hint;
   GtkWidget *current_task_label;
   GtkWidget *current_task_meta;
+  GtkWidget *timer_title_label;
+  GtkWidget *timer_value_label;
+  GtkWidget *timer_pill_label;
+  GtkWidget *timer_start_button;
+  GtkWidget *timer_skip_button;
+  GtkWidget *timer_focus_stat_label;
+  GtkWidget *timer_break_stat_label;
 } AppState;
 
 AppState *app_state_create(GtkWindow *window, TaskStore *store);

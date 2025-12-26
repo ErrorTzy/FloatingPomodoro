@@ -354,14 +354,17 @@ entry.task-title-entry {
 }
 
 spinbutton.task-spin,
-spinbutton.task-spin entry {
+spinbutton.task-spin entry,
+spinbutton.setting-spin,
+spinbutton.setting-spin entry {
   background-color: @pomodoro_surface;
   border-radius: 12px;
   border: 1px solid @pomodoro_border;
   padding: 6px 10px;
 }
 
-spinbutton.task-spin button {
+spinbutton.task-spin button,
+spinbutton.setting-spin button {
   background-color: transparent;
   border: none;
 }

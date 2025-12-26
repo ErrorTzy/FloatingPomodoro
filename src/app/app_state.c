@@ -1,5 +1,6 @@
 #include "app/app_state.h"
 
+#include "core/pomodoro_timer.h"
 #include "ui/dialogs.h"
 
 AppState *
@@ -22,6 +23,7 @@ app_state_free(gpointer data)
   dialogs_cleanup_settings(state);
   dialogs_cleanup_archived(state);
 
+  pomodoro_timer_free(state->timer);
   task_store_free(state->store);
   g_free(state);
 }

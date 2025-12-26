@@ -1,11 +1,166 @@
 #include "ui/main_window.h"
 
 #include "app/app_state.h"
+#include "core/pomodoro_timer.h"
 #include "core/task_store.h"
+#include "storage/settings_storage.h"
 #include "storage/task_storage.h"
 #include "ui/dialogs.h"
 #include "ui/task_list.h"
 #include "config.h"
+
+static const char *
+timer_phase_title(PomodoroPhase phase)
+{
+  switch (phase) {
+    case POMODORO_PHASE_SHORT_BREAK:
+      return "Short Break";
+    case POMODORO_PHASE_LONG_BREAK:
+      return "Long Break";
+    case POMODORO_PHASE_FOCUS:
+    default:
+      return "Focus Session";
+  }
+}
+
+static const char *
+timer_phase_action(PomodoroPhase phase)
+{
+  switch (phase) {
+    case POMODORO_PHASE_SHORT_BREAK:
+      return "Start Break";
+    case POMODORO_PHASE_LONG_BREAK:
+      return "Start Long Break";
+    case POMODORO_PHASE_FOCUS:
+    default:
+      return "Start Focus";
+  }
+}
+
+static char *
+format_timer_value(gint64 seconds)
+{
+  if (seconds < 0) {
+    seconds = 0;
+  }
+
+  gint64 minutes = seconds / 60;
+  gint64 secs = seconds % 60;
+  return g_strdup_printf("%02" G_GINT64_FORMAT ":%02" G_GINT64_FORMAT,
+                         minutes,
+                         secs);
+}
+
+static void
+update_timer_stats(AppState *state, PomodoroTimer *timer)
+{
+  if (state == NULL || timer == NULL) {
+    return;
+  }
+
+  if (state->timer_focus_stat_label != NULL) {
+    char *focus_text = format_timer_value(pomodoro_timer_get_focus_seconds(timer));
+    gtk_label_set_text(GTK_LABEL(state->timer_focus_stat_label), focus_text);
+    g_free(focus_text);
+  }
+
+  if (state->timer_break_stat_label != NULL) {
+    char *breaks =
+        g_strdup_printf("%u", pomodoro_timer_get_breaks_completed(timer));
+    gtk_label_set_text(GTK_LABEL(state->timer_break_stat_label), breaks);
+    g_free(breaks);
+  }
+}
+
+static void
+main_window_update_timer(AppState *state)
+{
+  if (state == NULL || state->timer == NULL) {
+    return;
+  }
+
+  PomodoroTimer *timer = state->timer;
+  PomodoroPhase phase = pomodoro_timer_get_phase(timer);
+  PomodoroPhase next_phase = pomodoro_timer_get_next_phase(timer);
+  PomodoroTimerState run_state = pomodoro_timer_get_state(timer);
+
+  if (state->timer_title_label != NULL) {
+    gtk_label_set_text(GTK_LABEL(state->timer_title_label),
+                       timer_phase_title(phase));
+  }
+
+  if (state->timer_value_label != NULL) {
+    char *value = format_timer_value(pomodoro_timer_get_remaining_seconds(timer));
+    gtk_label_set_text(GTK_LABEL(state->timer_value_label), value);
+    g_free(value);
+  }
+
+  if (state->timer_pill_label != NULL) {
+    const char *next_label = timer_phase_title(next_phase);
+    char *pill_text = g_strdup_printf("Next: %s", next_label);
+    gtk_label_set_text(GTK_LABEL(state->timer_pill_label), pill_text);
+    g_free(pill_text);
+  }
+
+  if (state->timer_start_button != NULL) {
+    const char *label = NULL;
+    if (run_state == POMODORO_TIMER_RUNNING) {
+      label = "Pause";
+    } else if (run_state == POMODORO_TIMER_PAUSED) {
+      label = "Resume";
+    } else {
+      label = timer_phase_action(phase);
+    }
+    gtk_button_set_label(GTK_BUTTON(state->timer_start_button), label);
+  }
+
+  if (state->timer_skip_button != NULL) {
+    gtk_widget_set_sensitive(state->timer_skip_button,
+                             run_state != POMODORO_TIMER_STOPPED);
+  }
+
+  update_timer_stats(state, timer);
+}
+
+static void
+on_timer_tick(PomodoroTimer *timer, gpointer user_data)
+{
+  (void)timer;
+  main_window_update_timer((AppState *)user_data);
+}
+
+static void
+on_timer_phase_changed(PomodoroTimer *timer, gpointer user_data)
+{
+  (void)timer;
+  main_window_update_timer((AppState *)user_data);
+}
+
+static void
+on_timer_start_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  AppState *state = user_data;
+  if (state == NULL || state->timer == NULL) {
+    return;
+  }
+
+  pomodoro_timer_toggle(state->timer);
+  main_window_update_timer(state);
+}
+
+static void
+on_timer_skip_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  AppState *state = user_data;
+  if (state == NULL || state->timer == NULL) {
+    return;
+  }
+
+  pomodoro_timer_skip(state->timer);
+  main_window_update_timer(state);
+}
 
 void
 main_window_present(GtkApplication *app)
@@ -23,8 +178,21 @@ main_window_present(GtkApplication *app)
   }
   task_store_apply_archive_policy(store);
 
+  PomodoroTimerConfig timer_config = pomodoro_timer_config_default();
+  if (!settings_storage_load_timer(&timer_config, &error)) {
+    g_warning("Failed to load timer settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+  PomodoroTimer *timer = pomodoro_timer_new(timer_config);
+
   AppState *state = app_state_create(GTK_WINDOW(window), store);
   g_object_set_data_full(G_OBJECT(window), "app-state", state, app_state_free);
+  state->timer = timer;
+  pomodoro_timer_set_update_callback(timer,
+                                     on_timer_tick,
+                                     on_timer_phase_changed,
+                                     state);
 
   GtkGesture *window_click = gtk_gesture_click_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(window_click), 0);
@@ -46,7 +214,7 @@ main_window_present(GtkApplication *app)
   gtk_widget_add_css_class(title, "app-title");
   gtk_widget_set_halign(title, GTK_ALIGN_START);
 
-  GtkWidget *subtitle = gtk_label_new("Task persistence is live. Timer controls arrive next.");
+  GtkWidget *subtitle = gtk_label_new("Start a focus session when you're ready.");
   gtk_widget_add_css_class(subtitle, "app-subtitle");
   gtk_widget_set_halign(subtitle, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(subtitle), TRUE);
@@ -88,23 +256,36 @@ main_window_present(GtkApplication *app)
   GtkWidget *timer_title = gtk_label_new("Focus Session");
   gtk_widget_add_css_class(timer_title, "card-title");
   gtk_widget_set_halign(timer_title, GTK_ALIGN_START);
+  state->timer_title_label = timer_title;
 
   GtkWidget *timer_value = gtk_label_new("25:00");
   gtk_widget_add_css_class(timer_value, "timer-value");
   gtk_widget_set_halign(timer_value, GTK_ALIGN_START);
+  state->timer_value_label = timer_value;
 
   GtkWidget *timer_pill = gtk_label_new("Next: short break");
   gtk_widget_add_css_class(timer_pill, "pill");
   gtk_widget_set_halign(timer_pill, GTK_ALIGN_START);
+  state->timer_pill_label = timer_pill;
 
   GtkWidget *timer_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_widget_set_halign(timer_actions, GTK_ALIGN_START);
 
   GtkWidget *start_button = gtk_button_new_with_label("Start Focus");
   gtk_widget_add_css_class(start_button, "btn-primary");
+  g_signal_connect(start_button,
+                   "clicked",
+                   G_CALLBACK(on_timer_start_clicked),
+                   state);
+  state->timer_start_button = start_button;
 
   GtkWidget *skip_button = gtk_button_new_with_label("Skip");
   gtk_widget_add_css_class(skip_button, "btn-secondary");
+  g_signal_connect(skip_button,
+                   "clicked",
+                   G_CALLBACK(on_timer_skip_clicked),
+                   state);
+  state->timer_skip_button = skip_button;
 
   gtk_box_append(GTK_BOX(timer_actions), start_button);
   gtk_box_append(GTK_BOX(timer_actions), skip_button);
@@ -146,6 +327,7 @@ main_window_present(GtkApplication *app)
   GtkWidget *stat_block_left = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
   GtkWidget *stat_value_left = gtk_label_new("00:00");
   gtk_widget_add_css_class(stat_value_left, "stat-value");
+  state->timer_focus_stat_label = stat_value_left;
   GtkWidget *stat_label_left = gtk_label_new("Focus time");
   gtk_widget_add_css_class(stat_label_left, "stat-label");
   gtk_box_append(GTK_BOX(stat_block_left), stat_value_left);
@@ -154,6 +336,7 @@ main_window_present(GtkApplication *app)
   GtkWidget *stat_block_right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
   GtkWidget *stat_value_right = gtk_label_new("0");
   gtk_widget_add_css_class(stat_value_right, "stat-value");
+  state->timer_break_stat_label = stat_value_right;
   GtkWidget *stat_label_right = gtk_label_new("Breaks");
   gtk_widget_add_css_class(stat_label_right, "stat-label");
   gtk_box_append(GTK_BOX(stat_block_right), stat_value_right);
@@ -291,6 +474,7 @@ main_window_present(GtkApplication *app)
   gtk_window_present(GTK_WINDOW(window));
 
   task_list_refresh(state);
+  main_window_update_timer(state);
 
   g_info("Main window presented");
 }

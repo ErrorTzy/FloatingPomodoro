@@ -1,5 +1,7 @@
 #include "ui/dialogs.h"
 
+#include "core/pomodoro_timer.h"
+#include "storage/settings_storage.h"
 #include "ui/task_list.h"
 
 typedef struct {
@@ -18,6 +20,10 @@ typedef struct {
   GtkWidget *keep_row;
   GtkSpinButton *days_spin;
   GtkSpinButton *keep_spin;
+  GtkSpinButton *focus_spin;
+  GtkSpinButton *short_spin;
+  GtkSpinButton *long_spin;
+  GtkSpinButton *interval_spin;
   gboolean suppress_signals;
 } SettingsDialog;
 
@@ -28,6 +34,7 @@ typedef struct {
 } ArchivedDialog;
 
 static void settings_dialog_update_controls(SettingsDialog *dialog);
+static void settings_dialog_update_timer_controls(SettingsDialog *dialog);
 
 static void
 settings_dialog_free(gpointer data)
@@ -278,6 +285,75 @@ on_settings_value_changed(GtkSpinButton *spin, gpointer user_data)
 }
 
 static void
+on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data)
+{
+  (void)spin;
+
+  SettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL ||
+      dialog->state->timer == NULL) {
+    return;
+  }
+
+  PomodoroTimerConfig config =
+      pomodoro_timer_get_config(dialog->state->timer);
+
+  if (dialog->focus_spin != NULL) {
+    config.focus_minutes =
+        (guint)gtk_spin_button_get_value_as_int(dialog->focus_spin);
+  }
+  if (dialog->short_spin != NULL) {
+    config.short_break_minutes =
+        (guint)gtk_spin_button_get_value_as_int(dialog->short_spin);
+  }
+  if (dialog->long_spin != NULL) {
+    config.long_break_minutes =
+        (guint)gtk_spin_button_get_value_as_int(dialog->long_spin);
+  }
+  if (dialog->interval_spin != NULL) {
+    config.long_break_interval =
+        (guint)gtk_spin_button_get_value_as_int(dialog->interval_spin);
+  }
+
+  config = pomodoro_timer_config_normalize(config);
+  pomodoro_timer_apply_config(dialog->state->timer, config);
+
+  GError *error = NULL;
+  if (!settings_storage_save_timer(&config, &error)) {
+    g_warning("Failed to save timer settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+}
+
+static void
+settings_dialog_update_timer_controls(SettingsDialog *dialog)
+{
+  if (dialog == NULL || dialog->state == NULL || dialog->state->timer == NULL) {
+    return;
+  }
+
+  PomodoroTimerConfig config =
+      pomodoro_timer_get_config(dialog->state->timer);
+
+  if (dialog->focus_spin != NULL) {
+    gtk_spin_button_set_value(dialog->focus_spin, (gdouble)config.focus_minutes);
+  }
+  if (dialog->short_spin != NULL) {
+    gtk_spin_button_set_value(dialog->short_spin,
+                              (gdouble)config.short_break_minutes);
+  }
+  if (dialog->long_spin != NULL) {
+    gtk_spin_button_set_value(dialog->long_spin,
+                              (gdouble)config.long_break_minutes);
+  }
+  if (dialog->interval_spin != NULL) {
+    gtk_spin_button_set_value(dialog->interval_spin,
+                              (gdouble)config.long_break_interval);
+  }
+}
+
+static void
 settings_dialog_update_controls(SettingsDialog *dialog)
 {
   if (dialog == NULL || dialog->state == NULL) {
@@ -321,6 +397,8 @@ settings_dialog_update_controls(SettingsDialog *dialog)
     gtk_widget_set_visible(dialog->keep_row,
                            strategy.type == TASK_ARCHIVE_KEEP_LATEST);
   }
+
+  settings_dialog_update_timer_controls(dialog);
 
   dialog->suppress_signals = FALSE;
 }
@@ -392,6 +470,62 @@ show_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_label);
   gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_spin);
 
+  GtkWidget *timer_section_title = gtk_label_new("Timer durations");
+  gtk_widget_add_css_class(timer_section_title, "section-title");
+  gtk_widget_set_halign(timer_section_title, GTK_ALIGN_START);
+
+  GtkWidget *focus_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *focus_label = gtk_label_new("Focus minutes");
+  gtk_widget_add_css_class(focus_label, "setting-label");
+  gtk_widget_set_halign(focus_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(focus_label, TRUE);
+  GtkWidget *focus_spin = gtk_spin_button_new_with_range(1, 120, 1);
+  gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(focus_spin), TRUE);
+  gtk_widget_add_css_class(focus_spin, "setting-spin");
+  gtk_widget_set_halign(focus_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(focus_row), focus_label);
+  gtk_box_append(GTK_BOX(focus_row), focus_spin);
+
+  GtkWidget *short_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *short_label = gtk_label_new("Short break");
+  gtk_widget_add_css_class(short_label, "setting-label");
+  gtk_widget_set_halign(short_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(short_label, TRUE);
+  GtkWidget *short_spin = gtk_spin_button_new_with_range(1, 30, 1);
+  gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(short_spin), TRUE);
+  gtk_widget_add_css_class(short_spin, "setting-spin");
+  gtk_widget_set_halign(short_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(short_row), short_label);
+  gtk_box_append(GTK_BOX(short_row), short_spin);
+
+  GtkWidget *long_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *long_label = gtk_label_new("Long break");
+  gtk_widget_add_css_class(long_label, "setting-label");
+  gtk_widget_set_halign(long_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(long_label, TRUE);
+  GtkWidget *long_spin = gtk_spin_button_new_with_range(1, 60, 1);
+  gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(long_spin), TRUE);
+  gtk_widget_add_css_class(long_spin, "setting-spin");
+  gtk_widget_set_halign(long_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(long_row), long_label);
+  gtk_box_append(GTK_BOX(long_row), long_spin);
+
+  GtkWidget *interval_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *interval_label = gtk_label_new("Long break every (sessions)");
+  gtk_widget_add_css_class(interval_label, "setting-label");
+  gtk_widget_set_halign(interval_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(interval_label, TRUE);
+  GtkWidget *interval_spin = gtk_spin_button_new_with_range(1, 12, 1);
+  gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(interval_spin), TRUE);
+  gtk_widget_add_css_class(interval_spin, "setting-spin");
+  gtk_widget_set_halign(interval_spin, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(interval_row), interval_label);
+  gtk_box_append(GTK_BOX(interval_row), interval_spin);
+
   GtkWidget *hint =
       gtk_label_new("Changes apply immediately and can be adjusted anytime.");
   gtk_widget_add_css_class(hint, "task-meta");
@@ -403,6 +537,11 @@ show_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(root), archive_dropdown);
   gtk_box_append(GTK_BOX(root), archive_days_row);
   gtk_box_append(GTK_BOX(root), archive_keep_row);
+  gtk_box_append(GTK_BOX(root), timer_section_title);
+  gtk_box_append(GTK_BOX(root), focus_row);
+  gtk_box_append(GTK_BOX(root), short_row);
+  gtk_box_append(GTK_BOX(root), long_row);
+  gtk_box_append(GTK_BOX(root), interval_row);
   gtk_box_append(GTK_BOX(root), hint);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
@@ -416,6 +555,10 @@ show_settings_window(AppState *state)
   dialog->keep_row = archive_keep_row;
   dialog->days_spin = GTK_SPIN_BUTTON(archive_days_spin);
   dialog->keep_spin = GTK_SPIN_BUTTON(archive_keep_spin);
+  dialog->focus_spin = GTK_SPIN_BUTTON(focus_spin);
+  dialog->short_spin = GTK_SPIN_BUTTON(short_spin);
+  dialog->long_spin = GTK_SPIN_BUTTON(long_spin);
+  dialog->interval_spin = GTK_SPIN_BUTTON(interval_spin);
 
   g_signal_connect(archive_dropdown,
                    "notify::selected",
@@ -428,6 +571,22 @@ show_settings_window(AppState *state)
   g_signal_connect(archive_keep_spin,
                    "value-changed",
                    G_CALLBACK(on_settings_value_changed),
+                   dialog);
+  g_signal_connect(focus_spin,
+                   "value-changed",
+                   G_CALLBACK(on_timer_settings_changed),
+                   dialog);
+  g_signal_connect(short_spin,
+                   "value-changed",
+                   G_CALLBACK(on_timer_settings_changed),
+                   dialog);
+  g_signal_connect(long_spin,
+                   "value-changed",
+                   G_CALLBACK(on_timer_settings_changed),
+                   dialog);
+  g_signal_connect(interval_spin,
+                   "value-changed",
+                   G_CALLBACK(on_timer_settings_changed),
                    dialog);
 
   g_object_set_data_full(G_OBJECT(window),
