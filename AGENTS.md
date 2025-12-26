@@ -116,6 +116,10 @@ Notes:
 
 ## 6) Coding Standards
 
+THE MOST IMPORTANT RULE IS: Separation of Concern!
+
+- When a file is longer than 500 lines, think about its functionality and try to split it up for maintainability
+
 - Language: C (C11).
 - Use clear module boundaries and minimal global state.
 - Prefer small, testable functions.
@@ -167,9 +171,22 @@ Notes:
 ## 8) Testing Strategy (non‑code)
 
 - Manual functional tests on this machine for overlay, tray, focus guard, and transparency.
-- Basic regression checklist before each PR merge.
+- Basic regression checklist before each PR merge (see below).
 - For focus guard: verify repeated warnings and stats logging.
 - For Chrome/Ollama: verify “no debug port” gracefully and “model list refresh” behavior.
+
+### PR merge checklist (quick)
+- Build succeeds (`ninja -C build`).
+- App launches without warnings or GTK assertions.
+- Task list renders and actions respond (edit/archive/restore/delete).
+- Visual styling matches the CSS system (no default GTK look).
+
+### UI resources (GTK4)
+- Register resources in `data/resources.gresource.xml` and rebuild so they compile into the binary.
+- Themed icons live under `data/icons/scalable/actions/` (do not include `hicolor` in the resource path).
+- Add icon theme resource root at startup:
+  - `/com/scott/Xfce4FloatingPomodoro/icons`
+- Use `gtk_image_new_from_icon_name("...-symbolic")` to resolve icons via the theme.
 
 ## 9) PR‑by‑PR Roadmap
 
@@ -188,6 +205,7 @@ Each PR includes motivation, implementation instructions, and testable standards
 **Testable standard:** UI uses new colors and font; no default theme styling visible.
 
 ### PR 3 — Task model & persistence
+**Status:** Complete (2025-12-26).  
 **Motivation:** Core feature: reusable tasks with archive rules.  
 **Instructions:** Data model; save/load; archive strategies (3 days default, immediate, keep N).  
 **Testable standard:** Tasks persist across restarts; reactivation works; archive behavior is configurable.
