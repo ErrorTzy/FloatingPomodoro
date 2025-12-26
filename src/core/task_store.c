@@ -59,6 +59,25 @@ normalize_repeat_count(guint repeat_count)
   return repeat_count;
 }
 
+static void
+task_store_complete_other_active(TaskStore *store, PomodoroTask *keep)
+{
+  if (store == NULL || keep == NULL) {
+    return;
+  }
+
+  for (guint i = 0; i < store->tasks->len; i++) {
+    PomodoroTask *task = g_ptr_array_index(store->tasks, i);
+    if (task == NULL || task == keep) {
+      continue;
+    }
+
+    if (task->status == TASK_STATUS_ACTIVE) {
+      task_store_complete(store, task);
+    }
+  }
+}
+
 TaskStore *
 task_store_new(void)
 {
@@ -113,6 +132,7 @@ task_store_add(TaskStore *store, const char *title, guint repeat_count)
   task->created_at = g_date_time_new_now_local();
 
   g_ptr_array_add(store->tasks, task);
+  task_store_complete_other_active(store, task);
   return task;
 }
 
@@ -193,6 +213,7 @@ task_store_reactivate(TaskStore *store, PomodoroTask *task)
     return;
   }
 
+  task_store_complete_other_active(store, task);
   task->status = TASK_STATUS_ACTIVE;
   if (task->completed_at != NULL) {
     g_date_time_unref(task->completed_at);
@@ -345,6 +366,41 @@ task_store_apply_archive_policy(TaskStore *store)
 
     g_ptr_array_free(completed, TRUE);
   }
+}
+
+void
+task_store_enforce_single_active(TaskStore *store)
+{
+  if (store == NULL) {
+    return;
+  }
+
+  PomodoroTask *keep = NULL;
+  for (guint i = 0; i < store->tasks->len; i++) {
+    PomodoroTask *task = g_ptr_array_index(store->tasks, i);
+    if (task == NULL || task->status != TASK_STATUS_ACTIVE) {
+      continue;
+    }
+
+    if (keep == NULL) {
+      keep = task;
+      continue;
+    }
+
+    if (task->created_at != NULL && keep->created_at != NULL) {
+      if (g_date_time_compare(task->created_at, keep->created_at) > 0) {
+        keep = task;
+      }
+    } else if (keep->created_at == NULL && task->created_at != NULL) {
+      keep = task;
+    }
+  }
+
+  if (keep == NULL) {
+    return;
+  }
+
+  task_store_complete_other_active(store, keep);
 }
 
 const char *

@@ -203,6 +203,8 @@ task_storage_load(TaskStore *store, GError **error)
   g_key_file_free(key_file);
   g_free(path);
 
+  task_store_enforce_single_active(store);
+
   return TRUE;
 }
 

@@ -48,6 +48,7 @@ gboolean task_store_remove(TaskStore *store, PomodoroTask *task);
 void task_store_set_archive_strategy(TaskStore *store, TaskArchiveStrategy strategy);
 TaskArchiveStrategy task_store_get_archive_strategy(TaskStore *store);
 void task_store_apply_archive_policy(TaskStore *store);
+void task_store_enforce_single_active(TaskStore *store);
 
 const char *pomodoro_task_get_id(const PomodoroTask *task);
 const char *pomodoro_task_get_title(const PomodoroTask *task);
