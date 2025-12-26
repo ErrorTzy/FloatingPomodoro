@@ -50,6 +50,7 @@ FocusGuardConfig
 focus_guard_config_default(void)
 {
   FocusGuardConfig config = {0};
+  config.global_stats_enabled = TRUE;
   config.warnings_enabled = TRUE;
   config.detection_interval_seconds = 1;
   config.blacklist = g_new0(char *, 1);
@@ -79,6 +80,7 @@ focus_guard_config_copy(const FocusGuardConfig *config)
   }
 
   copy.warnings_enabled = config->warnings_enabled;
+  copy.global_stats_enabled = config->global_stats_enabled;
   copy.detection_interval_seconds = config->detection_interval_seconds;
   g_strfreev(copy.blacklist);
   copy.blacklist = config->blacklist ? g_strdupv(config->blacklist) : g_new0(char *, 1);

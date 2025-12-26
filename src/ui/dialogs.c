@@ -33,6 +33,7 @@ typedef struct {
   GtkSpinButton *long_spin;
   GtkSpinButton *interval_spin;
   GtkCheckButton *close_to_tray_check;
+  GtkCheckButton *focus_guard_global_check;
   GtkCheckButton *focus_guard_warnings_check;
   GtkSpinButton *focus_guard_interval_spin;
   GtkWidget *focus_guard_list;
@@ -55,6 +56,8 @@ static void timer_settings_update_controls(TimerSettingsDialog *dialog);
 static void focus_guard_settings_update_controls(TimerSettingsDialog *dialog);
 static void on_focus_guard_interval_changed(GtkSpinButton *spin,
                                             gpointer user_data);
+static void on_focus_guard_global_toggled(GtkCheckButton *button,
+                                          gpointer user_data);
 static void on_focus_guard_warnings_toggled(GtkCheckButton *button,
                                             gpointer user_data);
 static void on_focus_guard_add_clicked(GtkButton *button, gpointer user_data);
@@ -624,6 +627,11 @@ focus_guard_apply_settings(TimerSettingsDialog *dialog)
         (guint)gtk_spin_button_get_value_as_int(dialog->focus_guard_interval_spin);
   }
 
+  if (dialog->focus_guard_global_check != NULL) {
+    config.global_stats_enabled =
+        gtk_check_button_get_active(dialog->focus_guard_global_check);
+  }
+
   if (dialog->focus_guard_warnings_check != NULL) {
     config.warnings_enabled =
         gtk_check_button_get_active(dialog->focus_guard_warnings_check);
@@ -715,6 +723,11 @@ focus_guard_settings_update_controls(TimerSettingsDialog *dialog)
                               (gdouble)config.detection_interval_seconds);
   }
 
+  if (dialog->focus_guard_global_check != NULL) {
+    gtk_check_button_set_active(dialog->focus_guard_global_check,
+                                config.global_stats_enabled);
+  }
+
   if (dialog->focus_guard_warnings_check != NULL) {
     gtk_check_button_set_active(dialog->focus_guard_warnings_check,
                                 config.warnings_enabled);
@@ -737,6 +750,13 @@ static void
 on_focus_guard_interval_changed(GtkSpinButton *spin, gpointer user_data)
 {
   (void)spin;
+  focus_guard_apply_settings((TimerSettingsDialog *)user_data);
+}
+
+static void
+on_focus_guard_global_toggled(GtkCheckButton *button, gpointer user_data)
+{
+  (void)button;
   focus_guard_apply_settings((TimerSettingsDialog *)user_data);
 }
 
@@ -1154,6 +1174,18 @@ show_timer_settings_window(AppState *state)
   gtk_widget_set_halign(guard_desc, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(guard_desc), TRUE);
 
+  GtkWidget *guard_global_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *guard_global_label = gtk_label_new("Global app usage stats");
+  gtk_widget_add_css_class(guard_global_label, "setting-label");
+  gtk_widget_set_halign(guard_global_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(guard_global_label, TRUE);
+  GtkWidget *guard_global_check = gtk_check_button_new();
+  gtk_widget_set_halign(guard_global_check, GTK_ALIGN_END);
+  gtk_widget_set_tooltip_text(guard_global_check,
+                              "Track app usage continuously while the app runs.");
+  gtk_box_append(GTK_BOX(guard_global_row), guard_global_label);
+  gtk_box_append(GTK_BOX(guard_global_row), guard_global_check);
+
   GtkWidget *guard_warning_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *guard_warning_label = gtk_label_new("Warnings");
   gtk_widget_add_css_class(guard_warning_label, "setting-label");
@@ -1251,6 +1283,7 @@ show_timer_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(root), divider);
   gtk_box_append(GTK_BOX(root), guard_title);
   gtk_box_append(GTK_BOX(root), guard_desc);
+  gtk_box_append(GTK_BOX(root), guard_global_row);
   gtk_box_append(GTK_BOX(root), guard_warning_row);
   gtk_box_append(GTK_BOX(root), guard_interval_row);
   gtk_box_append(GTK_BOX(root), guard_entry_row);
@@ -1270,6 +1303,7 @@ show_timer_settings_window(AppState *state)
   dialog->long_spin = GTK_SPIN_BUTTON(long_spin);
   dialog->interval_spin = GTK_SPIN_BUTTON(interval_spin);
   dialog->close_to_tray_check = GTK_CHECK_BUTTON(tray_check);
+  dialog->focus_guard_global_check = GTK_CHECK_BUTTON(guard_global_check);
   dialog->focus_guard_warnings_check = GTK_CHECK_BUTTON(guard_warning_check);
   dialog->focus_guard_interval_spin = GTK_SPIN_BUTTON(guard_interval_spin);
   dialog->focus_guard_list = guard_list;
@@ -1300,6 +1334,10 @@ show_timer_settings_window(AppState *state)
   g_signal_connect(guard_interval_spin,
                    "value-changed",
                    G_CALLBACK(on_focus_guard_interval_changed),
+                   dialog);
+  g_signal_connect(guard_global_check,
+                   "toggled",
+                   G_CALLBACK(on_focus_guard_global_toggled),
                    dialog);
   g_signal_connect(guard_warning_check,
                    "toggled",

@@ -13,6 +13,7 @@ app_sources = files(
   'overlay/overlay_window_ui.c',
   'storage/settings_storage.c',
   'storage/task_storage.c',
+  'storage/usage_stats_storage.c',
   'tray/tray_icon.c',
   'tray/tray_item.c',
   'tray/tray_menu.c',
@@ -26,7 +27,7 @@ app_sources = files(
 executable(
   'xfce4-floating-pomodoro',
   app_sources,
-  dependencies: [gtk4_dep, fontconfig_dep, x11_dep],
+  dependencies: [gtk4_dep, fontconfig_dep, x11_dep, sqlite3_dep],
   include_directories: include_directories('..', '.'),
   install: true
 )

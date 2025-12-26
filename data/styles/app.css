@@ -407,6 +407,20 @@ label.focus-guard-time {
   color: @pomodoro_text_muted;
 }
 
+label.focus-guard-context,
+label.focus-guard-day {
+  font-size: 12px;
+  color: @pomodoro_text_muted;
+}
+
+label.focus-guard-context {
+  font-weight: 600;
+}
+
+label.focus-guard-day {
+  font-weight: 500;
+}
+
 label.focus-guard-empty {
   font-size: 13px;
   color: @pomodoro_text_muted;

@@ -3,6 +3,7 @@
 #include <glib.h>
 
 typedef struct {
+  gboolean global_stats_enabled;
   gboolean warnings_enabled;
   guint detection_interval_seconds;
   char **blacklist;

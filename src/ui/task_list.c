@@ -1,5 +1,6 @@
 #include "ui/task_list.h"
 
+#include "focus/focus_guard.h"
 #include "storage/task_storage.h"
 #include "ui/dialogs.h"
 #include "ui/main_window.h"
@@ -22,6 +23,26 @@ static void on_task_edit_clicked(GtkButton *button, gpointer user_data);
 static void on_task_archive_clicked(GtkButton *button, gpointer user_data);
 static void on_task_restore_clicked(GtkButton *button, gpointer user_data);
 static void on_task_delete_clicked(GtkButton *button, gpointer user_data);
+static void on_task_row_pressed(GtkGestureClick *gesture,
+                                gint n_press,
+                                gdouble x,
+                                gdouble y,
+                                gpointer user_data);
+
+static TaskRowControls *
+task_row_controls_from_widget(GtkWidget *widget)
+{
+  GtkWidget *current = widget;
+  while (current != NULL) {
+    TaskRowControls *controls =
+        g_object_get_data(G_OBJECT(current), "task-row-controls");
+    if (controls != NULL) {
+      return controls;
+    }
+    current = gtk_widget_get_parent(current);
+  }
+  return NULL;
+}
 
 static GtkWidget *
 create_task_icon(const char *icon_name)
@@ -363,13 +384,7 @@ task_list_on_window_pressed(GtkGestureClick *gesture,
 {
   (void)n_press;
   AppState *state = user_data;
-  if (state == NULL || state->editing_controls == NULL) {
-    return;
-  }
-
-  TaskRowControls *controls = state->editing_controls;
-  if (controls->title_entry == NULL ||
-      !gtk_widget_get_visible(controls->title_entry)) {
+  if (state == NULL) {
     return;
   }
 
@@ -379,19 +394,26 @@ task_list_on_window_pressed(GtkGestureClick *gesture,
     return;
   }
 
-  if (target == controls->title_entry ||
-      gtk_widget_is_ancestor(target, controls->title_entry)) {
-    return;
+  TaskRowControls *row_controls = task_row_controls_from_widget(target);
+  gboolean clicked_task_row = row_controls != NULL;
+
+  TaskRowControls *controls = state->editing_controls;
+  if (controls != NULL &&
+      controls->title_entry != NULL &&
+      gtk_widget_get_visible(controls->title_entry)) {
+    if (target != controls->title_entry &&
+        !gtk_widget_is_ancestor(target, controls->title_entry) &&
+        (controls->edit_button == NULL ||
+         (target != controls->edit_button &&
+          !gtk_widget_is_ancestor(target, controls->edit_button)))) {
+      g_debug("Window click outside title entry; applying inline edit");
+      apply_task_title_edit(controls);
+    }
   }
 
-  if (controls->edit_button != NULL &&
-      (target == controls->edit_button ||
-       gtk_widget_is_ancestor(target, controls->edit_button))) {
-    return;
+  if (!clicked_task_row && state->focus_guard != NULL) {
+    focus_guard_select_global(state->focus_guard);
   }
-
-  g_debug("Window click outside title entry; applying inline edit");
-  apply_task_title_edit(controls);
 }
 
 static void
@@ -422,6 +444,30 @@ update_current_task_summary(AppState *state)
                          "Add a task below or activate a pending one");
     }
   }
+}
+
+static void
+on_task_row_pressed(GtkGestureClick *gesture,
+                    gint n_press,
+                    gdouble x,
+                    gdouble y,
+                    gpointer user_data)
+{
+  (void)gesture;
+  (void)n_press;
+  (void)x;
+  (void)y;
+
+  TaskRowControls *controls = user_data;
+  if (controls == NULL || controls->state == NULL || controls->task == NULL) {
+    return;
+  }
+
+  if (controls->state->focus_guard == NULL) {
+    return;
+  }
+
+  focus_guard_select_task(controls->state->focus_guard, controls->task);
 }
 
 static void
@@ -576,6 +622,13 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
                          "task-row-controls",
                          controls,
                          task_row_controls_free);
+  GtkGesture *row_click = gtk_gesture_click_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(row_click), 1);
+  g_signal_connect(row_click,
+                   "pressed",
+                   G_CALLBACK(on_task_row_pressed),
+                   controls);
+  gtk_widget_add_controller(row, GTK_EVENT_CONTROLLER(row_click));
   g_signal_connect(decrement_button,
                    "clicked",
                    G_CALLBACK(on_task_cycle_decrement),

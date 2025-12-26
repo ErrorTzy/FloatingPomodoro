@@ -211,6 +211,14 @@ settings_storage_load_focus_guard(FocusGuardConfig *config, GError **error)
                                NULL);
   }
 
+  if (g_key_file_has_key(key_file, "focus_guard", "global_stats_enabled", NULL)) {
+    config->global_stats_enabled =
+        g_key_file_get_boolean(key_file,
+                               "focus_guard",
+                               "global_stats_enabled",
+                               NULL);
+  }
+
   if (g_key_file_has_key(key_file, "focus_guard", "interval_seconds", NULL)) {
     gint value = g_key_file_get_integer(key_file,
                                         "focus_guard",
@@ -274,6 +282,10 @@ settings_storage_save_focus_guard(const FocusGuardConfig *config,
                          "focus_guard",
                          "warnings_enabled",
                          normalized.warnings_enabled);
+  g_key_file_set_boolean(key_file,
+                         "focus_guard",
+                         "global_stats_enabled",
+                         normalized.global_stats_enabled);
   g_key_file_set_integer(key_file,
                          "focus_guard",
                          "interval_seconds",

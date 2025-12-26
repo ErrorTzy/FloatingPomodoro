@@ -720,15 +720,29 @@ main_window_present(GtkApplication *app)
   gtk_widget_set_size_request(focus_card, 240, -1);
   gtk_widget_set_valign(focus_card, GTK_ALIGN_START);
 
-  GtkWidget *focus_title = gtk_label_new("Focus guard");
+  GtkWidget *focus_title = gtk_label_new("Usage stats");
   gtk_widget_add_css_class(focus_title, "card-title");
   gtk_widget_set_halign(focus_title, GTK_ALIGN_START);
 
-  GtkWidget *focus_desc =
-      gtk_label_new("App usage during focus sessions.");
-  gtk_widget_add_css_class(focus_desc, "task-meta");
-  gtk_widget_set_halign(focus_desc, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(focus_desc), TRUE);
+  GtkWidget *focus_meta_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_hexpand(focus_meta_row, TRUE);
+
+  GtkWidget *focus_context = gtk_label_new("Global stats");
+  gtk_widget_add_css_class(focus_context, "focus-guard-context");
+  gtk_widget_set_halign(focus_context, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(focus_context, TRUE);
+  gtk_label_set_xalign(GTK_LABEL(focus_context), 0.0f);
+  gtk_label_set_ellipsize(GTK_LABEL(focus_context), PANGO_ELLIPSIZE_END);
+  state->focus_stats_context_label = focus_context;
+
+  GtkWidget *focus_day = gtk_label_new("Today");
+  gtk_widget_add_css_class(focus_day, "focus-guard-day");
+  gtk_widget_set_halign(focus_day, GTK_ALIGN_END);
+  gtk_label_set_xalign(GTK_LABEL(focus_day), 1.0f);
+  state->focus_stats_day_label = focus_day;
+
+  gtk_box_append(GTK_BOX(focus_meta_row), focus_context);
+  gtk_box_append(GTK_BOX(focus_meta_row), focus_day);
 
   GtkWidget *focus_list = gtk_list_box_new();
   gtk_widget_add_css_class(focus_list, "focus-guard-list");
@@ -753,7 +767,7 @@ main_window_present(GtkApplication *app)
   state->focus_stats_empty_label = focus_empty_label;
 
   gtk_box_append(GTK_BOX(focus_card), focus_title);
-  gtk_box_append(GTK_BOX(focus_card), focus_desc);
+  gtk_box_append(GTK_BOX(focus_card), focus_meta_row);
   gtk_box_append(GTK_BOX(focus_card), focus_scroller);
   gtk_box_append(GTK_BOX(focus_card), focus_empty_label);
 
@@ -766,6 +780,9 @@ main_window_present(GtkApplication *app)
 
   task_list_refresh(state);
   main_window_update_timer_ui(state);
+  if (state->focus_guard != NULL) {
+    focus_guard_select_global(state->focus_guard);
+  }
 
   g_info("Main window presented");
 }

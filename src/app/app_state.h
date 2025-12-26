@@ -36,6 +36,8 @@ typedef struct {
   GtkWidget *overlay_toggle_icon;
   GtkWidget *timer_focus_stat_label;
   GtkWidget *timer_break_stat_label;
+  GtkWidget *focus_stats_context_label;
+  GtkWidget *focus_stats_day_label;
   GtkWidget *focus_stats_list;
   GtkWidget *focus_stats_empty_label;
   FocusGuard *focus_guard;

@@ -7,6 +7,7 @@ project('xfce4-floating-pomodoro', 'c',
 gtk4_dep = dependency('gtk4', version: '>=4.8')
 fontconfig_dep = dependency('fontconfig')
 x11_dep = dependency('x11', required: false)
+sqlite3_dep = dependency('sqlite3')
 gnome = import('gnome')
 
 conf = configuration_data()
