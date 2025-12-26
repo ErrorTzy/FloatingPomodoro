@@ -205,14 +205,16 @@ Each PR includes motivation, implementation instructions, and testable standards
 **Testable standard:** Tasks persist across restarts; reactivation works; archive behavior is configurable.
 
 ### PR 4 — Timer engine + main controls
+**Status:** Complete (2025-12-26).
 **Motivation:** Deliver working Pomodoro with minimal UX.  
-**Instructions:** Timer state machine; start/pause/skip; durations in settings.  
+**Instructions:** Timer state machine; start/pause/skip/stop; correct interactions with tasks
 **Testable standard:** Timer transitions correct; 1 Hz updates; no UI stalls.
 
 ### PR 5 — Floating ball overlay
+**Status:** Complete (2025-12-26).
 **Motivation:** Signature overlay experience.  
-**Instructions:** Frameless overlay; circular style; opacity slider; drag/resize; hover expansion; right‑click menu; X11 keep‑above hint.  
-**Testable standard:** Always visible; opacity works; drag/resize works; hover animation smooth; menu actions work; stays above on this machine.
+**Instructions:** Frameless overlay; circular style; opacity slider; drag; hover expansion; right‑click menu; X11 keep‑above hint.  
+**Testable standard:** Always visible; opacity works; drag works; hover animation smooth; menu actions work; stays above on this machine.
 
 ### PR 6 — Tray integration (SNI)
 **Motivation:** Fast control without opening main window.  
@@ -221,12 +223,12 @@ Each PR includes motivation, implementation instructions, and testable standards
 
 ### PR 7 — Focus Guard v1 (blacklist + stats)
 **Motivation:** Reduce distraction and track app usage.  
-**Instructions:** Active window tracking; blacklist warnings; stats per app; configurable warning interval (default 1–2 seconds).  
+**Instructions:** Active window tracking every 1 second; blacklist warnings (if floating ball is displayed, the floating ball turns red and shows warning; If not, pop up the flaoting ball first.); collect stats per active app; configurable detection interval (default 1 second).  
 **Testable standard:** Blacklisted app triggers repeated warnings; stats update; disabling warnings stops them.
 
 ### PR 8 — Chrome + Ollama relevance checks
 **Motivation:** Intelligent off‑task detection.  
-**Instructions:** Detect Chrome active; CDP read active tab; Ollama relevance check; model dropdown from `ollama list` with auto‑refresh; warning overlay on mismatch.  
+**Instructions:** Detect Chrome active; Chrome Debugging Port 9222 read active tab and page content; Ollama relevance check; model dropdown from `ollama list` with auto‑refresh; warning like blacklist if clearly irrelevant to task.  
 **Testable standard:** Works when Chrome debug port is enabled; shows clear message when it’s not; model list refreshes.
 
 ### PR 9 — Packaging (.deb)
