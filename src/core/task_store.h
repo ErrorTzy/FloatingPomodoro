@@ -39,6 +39,7 @@ PomodoroTask *task_store_import(TaskStore *store,
                                 GDateTime *completed_at,
                                 GDateTime *archived_at);
 PomodoroTask *task_store_find_by_id(TaskStore *store, const char *id);
+PomodoroTask *task_store_get_active(TaskStore *store);
 
 void task_store_complete(TaskStore *store, PomodoroTask *task);
 void task_store_reactivate(TaskStore *store, PomodoroTask *task);

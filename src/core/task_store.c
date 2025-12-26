@@ -188,6 +188,22 @@ task_store_find_by_id(TaskStore *store, const char *id)
   return NULL;
 }
 
+PomodoroTask *
+task_store_get_active(TaskStore *store)
+{
+  if (store == NULL) {
+    return NULL;
+  }
+
+  for (guint i = 0; i < store->tasks->len; i++) {
+    PomodoroTask *task = g_ptr_array_index(store->tasks, i);
+    if (task != NULL && task->status == TASK_STATUS_ACTIVE) {
+      return task;
+    }
+  }
+  return NULL;
+}
+
 void
 task_store_complete(TaskStore *store, PomodoroTask *task)
 {

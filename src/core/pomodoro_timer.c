@@ -4,11 +4,16 @@ struct _PomodoroTimer {
   PomodoroTimerConfig config;
   PomodoroPhase phase;
   PomodoroTimerState state;
-  gint64 remaining_seconds;
+  gint64 remaining_ms;
   guint focus_sessions_completed;
   guint breaks_completed;
-  gint64 focus_seconds_total;
-  gint64 break_seconds_total;
+  gint64 focus_ms_total;
+  gint64 break_ms_total;
+  gboolean use_test_durations;
+  gint64 focus_ms_override;
+  gint64 short_break_ms_override;
+  gint64 long_break_ms_override;
+  guint tick_interval_ms;
   guint tick_source_id;
   PomodoroTimerUpdateFn tick_cb;
   PomodoroTimerUpdateFn phase_cb;
@@ -16,20 +21,32 @@ struct _PomodoroTimer {
 };
 
 static gint64
-pomodoro_timer_phase_seconds(const PomodoroTimer *timer, PomodoroPhase phase)
+pomodoro_timer_phase_duration_ms(const PomodoroTimer *timer, PomodoroPhase phase)
 {
   if (timer == NULL) {
     return 0;
   }
 
+  if (timer->use_test_durations) {
+    switch (phase) {
+      case POMODORO_PHASE_SHORT_BREAK:
+        return timer->short_break_ms_override;
+      case POMODORO_PHASE_LONG_BREAK:
+        return timer->long_break_ms_override;
+      case POMODORO_PHASE_FOCUS:
+      default:
+        return timer->focus_ms_override;
+    }
+  }
+
   switch (phase) {
     case POMODORO_PHASE_SHORT_BREAK:
-      return (gint64)timer->config.short_break_minutes * 60;
+      return (gint64)timer->config.short_break_minutes * 60 * 1000;
     case POMODORO_PHASE_LONG_BREAK:
-      return (gint64)timer->config.long_break_minutes * 60;
+      return (gint64)timer->config.long_break_minutes * 60 * 1000;
     case POMODORO_PHASE_FOCUS:
     default:
-      return (gint64)timer->config.focus_minutes * 60;
+      return (gint64)timer->config.focus_minutes * 60 * 1000;
   }
 }
 
@@ -130,7 +147,7 @@ pomodoro_timer_advance_phase(PomodoroTimer *timer)
     timer->phase = POMODORO_PHASE_FOCUS;
   }
 
-  timer->remaining_seconds = pomodoro_timer_phase_seconds(timer, timer->phase);
+  timer->remaining_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
 }
 
 static gboolean
@@ -145,17 +162,22 @@ pomodoro_timer_on_tick(gpointer data)
     return G_SOURCE_REMOVE;
   }
 
-  if (timer->remaining_seconds > 0) {
-    timer->remaining_seconds -= 1;
+  gint64 tick_ms = (gint64)timer->tick_interval_ms;
+  if (tick_ms < 1) {
+    tick_ms = 1000;
+  }
+
+  if (timer->remaining_ms > 0) {
+    timer->remaining_ms -= tick_ms;
   }
 
   if (timer->phase == POMODORO_PHASE_FOCUS) {
-    timer->focus_seconds_total += 1;
+    timer->focus_ms_total += tick_ms;
   } else {
-    timer->break_seconds_total += 1;
+    timer->break_ms_total += tick_ms;
   }
 
-  if (timer->remaining_seconds <= 0) {
+  if (timer->remaining_ms <= 0) {
     pomodoro_timer_advance_phase(timer);
     pomodoro_timer_fire_phase(timer);
   }
@@ -171,7 +193,8 @@ pomodoro_timer_new(PomodoroTimerConfig config)
   timer->config = pomodoro_timer_config_normalize(config);
   timer->phase = POMODORO_PHASE_FOCUS;
   timer->state = POMODORO_TIMER_STOPPED;
-  timer->remaining_seconds = pomodoro_timer_phase_seconds(timer, timer->phase);
+  timer->tick_interval_ms = 1000;
+  timer->remaining_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
   return timer;
 }
 
@@ -210,11 +233,11 @@ pomodoro_timer_apply_config(PomodoroTimer *timer, PomodoroTimerConfig config)
 
   timer->config = pomodoro_timer_config_normalize(config);
 
-  gint64 phase_seconds = pomodoro_timer_phase_seconds(timer, timer->phase);
+  gint64 phase_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
   if (timer->state != POMODORO_TIMER_RUNNING) {
-    timer->remaining_seconds = phase_seconds;
-  } else if (timer->remaining_seconds > phase_seconds) {
-    timer->remaining_seconds = phase_seconds;
+    timer->remaining_ms = phase_ms;
+  } else if (timer->remaining_ms > phase_ms) {
+    timer->remaining_ms = phase_ms;
   }
 
   pomodoro_timer_fire_tick(timer);
@@ -227,6 +250,38 @@ pomodoro_timer_get_config(const PomodoroTimer *timer)
     return pomodoro_timer_config_default();
   }
   return timer->config;
+}
+
+void
+pomodoro_timer_set_test_durations(PomodoroTimer *timer,
+                                  gint64 focus_ms,
+                                  gint64 short_break_ms,
+                                  gint64 long_break_ms,
+                                  guint tick_interval_ms)
+{
+  if (timer == NULL) {
+    return;
+  }
+
+  timer->use_test_durations = TRUE;
+  timer->focus_ms_override = focus_ms;
+  timer->short_break_ms_override = short_break_ms;
+  timer->long_break_ms_override = long_break_ms;
+  if (tick_interval_ms > 0) {
+    timer->tick_interval_ms = tick_interval_ms;
+  }
+
+  if (timer->state != POMODORO_TIMER_RUNNING) {
+    timer->remaining_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
+  }
+
+  if (timer->state == POMODORO_TIMER_RUNNING) {
+    pomodoro_timer_stop_tick(timer);
+    timer->tick_source_id =
+        g_timeout_add(timer->tick_interval_ms, pomodoro_timer_on_tick, timer);
+  }
+
+  pomodoro_timer_fire_tick(timer);
 }
 
 PomodoroPhase
@@ -259,19 +314,27 @@ pomodoro_timer_get_state(const PomodoroTimer *timer)
 gint64
 pomodoro_timer_get_remaining_seconds(const PomodoroTimer *timer)
 {
-  return timer ? timer->remaining_seconds : 0;
+  if (timer == NULL) {
+    return 0;
+  }
+
+  if (timer->remaining_ms <= 0) {
+    return 0;
+  }
+
+  return (timer->remaining_ms + 999) / 1000;
 }
 
 gint64
 pomodoro_timer_get_focus_seconds(const PomodoroTimer *timer)
 {
-  return timer ? timer->focus_seconds_total : 0;
+  return timer ? timer->focus_ms_total / 1000 : 0;
 }
 
 gint64
 pomodoro_timer_get_break_seconds(const PomodoroTimer *timer)
 {
-  return timer ? timer->break_seconds_total : 0;
+  return timer ? timer->break_ms_total / 1000 : 0;
 }
 
 guint
@@ -297,14 +360,15 @@ pomodoro_timer_start(PomodoroTimer *timer)
     return;
   }
 
-  if (timer->remaining_seconds <= 0) {
-    timer->remaining_seconds = pomodoro_timer_phase_seconds(timer, timer->phase);
+  if (timer->remaining_ms <= 0) {
+    timer->remaining_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
   }
 
   timer->state = POMODORO_TIMER_RUNNING;
 
   if (timer->tick_source_id == 0) {
-    timer->tick_source_id = g_timeout_add_seconds(1, pomodoro_timer_on_tick, timer);
+    timer->tick_source_id =
+        g_timeout_add(timer->tick_interval_ms, pomodoro_timer_on_tick, timer);
   }
 
   pomodoro_timer_fire_tick(timer);
@@ -352,8 +416,28 @@ pomodoro_timer_skip(PomodoroTimer *timer)
   pomodoro_timer_fire_phase(timer);
 
   if (previous_state == POMODORO_TIMER_RUNNING && timer->tick_source_id == 0) {
-    timer->tick_source_id = g_timeout_add_seconds(1, pomodoro_timer_on_tick, timer);
+    timer->tick_source_id =
+        g_timeout_add(timer->tick_interval_ms, pomodoro_timer_on_tick, timer);
   }
+
+  pomodoro_timer_fire_tick(timer);
+}
+
+void
+pomodoro_timer_stop(PomodoroTimer *timer)
+{
+  if (timer == NULL) {
+    return;
+  }
+
+  pomodoro_timer_stop_tick(timer);
+  timer->state = POMODORO_TIMER_STOPPED;
+  timer->phase = POMODORO_PHASE_FOCUS;
+  timer->remaining_ms = pomodoro_timer_phase_duration_ms(timer, timer->phase);
+  timer->focus_sessions_completed = 0;
+  timer->breaks_completed = 0;
+  timer->focus_ms_total = 0;
+  timer->break_ms_total = 0;
 
   pomodoro_timer_fire_tick(timer);
 }

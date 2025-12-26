@@ -37,6 +37,11 @@ void pomodoro_timer_set_update_callback(PomodoroTimer *timer,
 
 void pomodoro_timer_apply_config(PomodoroTimer *timer, PomodoroTimerConfig config);
 PomodoroTimerConfig pomodoro_timer_get_config(const PomodoroTimer *timer);
+void pomodoro_timer_set_test_durations(PomodoroTimer *timer,
+                                       gint64 focus_ms,
+                                       gint64 short_break_ms,
+                                       gint64 long_break_ms,
+                                       guint tick_interval_ms);
 
 PomodoroPhase pomodoro_timer_get_phase(const PomodoroTimer *timer);
 PomodoroPhase pomodoro_timer_get_next_phase(const PomodoroTimer *timer);
@@ -52,3 +57,4 @@ void pomodoro_timer_start(PomodoroTimer *timer);
 void pomodoro_timer_pause(PomodoroTimer *timer);
 void pomodoro_timer_toggle(PomodoroTimer *timer);
 void pomodoro_timer_skip(PomodoroTimer *timer);
+void pomodoro_timer_stop(PomodoroTimer *timer);

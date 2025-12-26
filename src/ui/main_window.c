@@ -72,17 +72,34 @@ update_timer_stats(AppState *state, PomodoroTimer *timer)
   }
 }
 
-static void
-main_window_update_timer(AppState *state)
+static gboolean
+main_window_has_active_task(AppState *state)
+{
+  if (state == NULL) {
+    return FALSE;
+  }
+
+  return task_store_get_active(state->store) != NULL;
+}
+
+void
+main_window_update_timer_ui(AppState *state)
 {
   if (state == NULL || state->timer == NULL) {
     return;
   }
 
   PomodoroTimer *timer = state->timer;
+  PomodoroTimerState run_state = pomodoro_timer_get_state(timer);
+  gboolean has_task = main_window_has_active_task(state);
+
+  if (!has_task && run_state != POMODORO_TIMER_STOPPED) {
+    pomodoro_timer_stop(timer);
+    return;
+  }
+
   PomodoroPhase phase = pomodoro_timer_get_phase(timer);
   PomodoroPhase next_phase = pomodoro_timer_get_next_phase(timer);
-  PomodoroTimerState run_state = pomodoro_timer_get_state(timer);
 
   if (state->timer_title_label != NULL) {
     gtk_label_set_text(GTK_LABEL(state->timer_title_label),
@@ -112,10 +129,16 @@ main_window_update_timer(AppState *state)
       label = timer_phase_action(phase);
     }
     gtk_button_set_label(GTK_BUTTON(state->timer_start_button), label);
+    gtk_widget_set_sensitive(state->timer_start_button, has_task);
   }
 
   if (state->timer_skip_button != NULL) {
     gtk_widget_set_sensitive(state->timer_skip_button,
+                             run_state != POMODORO_TIMER_STOPPED);
+  }
+
+  if (state->timer_stop_button != NULL) {
+    gtk_widget_set_sensitive(state->timer_stop_button,
                              run_state != POMODORO_TIMER_STOPPED);
   }
 
@@ -126,14 +149,35 @@ static void
 on_timer_tick(PomodoroTimer *timer, gpointer user_data)
 {
   (void)timer;
-  main_window_update_timer((AppState *)user_data);
+  main_window_update_timer_ui((AppState *)user_data);
 }
 
 static void
 on_timer_phase_changed(PomodoroTimer *timer, gpointer user_data)
 {
-  (void)timer;
-  main_window_update_timer((AppState *)user_data);
+  AppState *state = user_data;
+  if (state == NULL || timer == NULL) {
+    return;
+  }
+
+  PomodoroPhase phase = pomodoro_timer_get_phase(timer);
+  if (phase == POMODORO_PHASE_SHORT_BREAK ||
+      phase == POMODORO_PHASE_LONG_BREAK) {
+    PomodoroTask *task = task_store_get_active(state->store);
+    if (task != NULL) {
+      guint repeats = pomodoro_task_get_repeat_count(task);
+      if (repeats <= 1) {
+        task_store_complete(state->store, task);
+      } else {
+        pomodoro_task_set_repeat_count(task, repeats - 1);
+      }
+      task_store_apply_archive_policy(state->store);
+      task_list_save_store(state);
+      task_list_refresh(state);
+    }
+  }
+
+  main_window_update_timer_ui(state);
 }
 
 static void
@@ -145,8 +189,12 @@ on_timer_start_clicked(GtkButton *button, gpointer user_data)
     return;
   }
 
+  if (!main_window_has_active_task(state)) {
+    return;
+  }
+
   pomodoro_timer_toggle(state->timer);
-  main_window_update_timer(state);
+  main_window_update_timer_ui(state);
 }
 
 static void
@@ -159,7 +207,20 @@ on_timer_skip_clicked(GtkButton *button, gpointer user_data)
   }
 
   pomodoro_timer_skip(state->timer);
-  main_window_update_timer(state);
+  main_window_update_timer_ui(state);
+}
+
+static void
+on_timer_stop_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  AppState *state = user_data;
+  if (state == NULL || state->timer == NULL) {
+    return;
+  }
+
+  pomodoro_timer_stop(state->timer);
+  main_window_update_timer_ui(state);
 }
 
 void
@@ -185,6 +246,13 @@ main_window_present(GtkApplication *app)
     g_clear_error(&error);
   }
   PomodoroTimer *timer = pomodoro_timer_new(timer_config);
+  const char *test_timing = g_getenv("POMODORO_TEST_TIMER");
+  if (test_timing != NULL &&
+      (g_ascii_strcasecmp(test_timing, "1") == 0 ||
+       g_ascii_strcasecmp(test_timing, "true") == 0 ||
+       g_ascii_strcasecmp(test_timing, "yes") == 0)) {
+    pomodoro_timer_set_test_durations(timer, 2500, 2000, 2000, 500);
+  }
 
   AppState *state = app_state_create(GTK_WINDOW(window), store);
   g_object_set_data_full(G_OBJECT(window), "app-state", state, app_state_free);
@@ -287,8 +355,17 @@ main_window_present(GtkApplication *app)
                    state);
   state->timer_skip_button = skip_button;
 
+  GtkWidget *stop_button = gtk_button_new_with_label("Stop");
+  gtk_widget_add_css_class(stop_button, "btn-danger");
+  g_signal_connect(stop_button,
+                   "clicked",
+                   G_CALLBACK(on_timer_stop_clicked),
+                   state);
+  state->timer_stop_button = stop_button;
+
   gtk_box_append(GTK_BOX(timer_actions), start_button);
   gtk_box_append(GTK_BOX(timer_actions), skip_button);
+  gtk_box_append(GTK_BOX(timer_actions), stop_button);
 
   gtk_box_append(GTK_BOX(timer_card), timer_title);
   gtk_box_append(GTK_BOX(timer_card), timer_value);
@@ -474,7 +551,7 @@ main_window_present(GtkApplication *app)
   gtk_window_present(GTK_WINDOW(window));
 
   task_list_refresh(state);
-  main_window_update_timer(state);
+  main_window_update_timer_ui(state);
 
   g_info("Main window presented");
 }

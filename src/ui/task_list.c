@@ -2,6 +2,7 @@
 
 #include "storage/task_storage.h"
 #include "ui/dialogs.h"
+#include "ui/main_window.h"
 
 typedef struct _TaskRowControls {
   AppState *state;
@@ -30,7 +31,6 @@ create_task_icon(const char *icon_name)
   return image;
 }
 
-static PomodoroTask *find_active_task(TaskStore *store);
 static void update_current_task_summary(AppState *state);
 static void append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task);
 
@@ -46,28 +46,6 @@ task_list_save_store(AppState *state)
     g_warning("Failed to save tasks: %s", error ? error->message : "unknown error");
     g_clear_error(&error);
   }
-}
-
-static PomodoroTask *
-find_active_task(TaskStore *store)
-{
-  if (store == NULL) {
-    return NULL;
-  }
-
-  const GPtrArray *tasks = task_store_get_tasks(store);
-  if (tasks == NULL) {
-    return NULL;
-  }
-
-  for (guint i = 0; i < tasks->len; i++) {
-    PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
-    if (task != NULL && pomodoro_task_get_status(task) == TASK_STATUS_ACTIVE) {
-      return task;
-    }
-  }
-
-  return NULL;
 }
 
 static guint
@@ -423,7 +401,7 @@ update_current_task_summary(AppState *state)
     return;
   }
 
-  const PomodoroTask *active_task = find_active_task(state->store);
+  const PomodoroTask *active_task = task_store_get_active(state->store);
 
   if (active_task != NULL) {
     gtk_label_set_text(GTK_LABEL(state->current_task_label),
@@ -696,6 +674,7 @@ task_list_refresh(AppState *state)
   }
 
   update_current_task_summary(state);
+  main_window_update_timer_ui(state);
 }
 
 static void
@@ -770,7 +749,7 @@ on_task_status_clicked(GtkButton *button, gpointer user_data)
   }
 
   if (status == TASK_STATUS_COMPLETED) {
-    PomodoroTask *active_task = find_active_task(state->store);
+    PomodoroTask *active_task = task_store_get_active(state->store);
     if (active_task == NULL) {
       task_store_reactivate(state->store, task);
       task_store_apply_archive_policy(state->store);
