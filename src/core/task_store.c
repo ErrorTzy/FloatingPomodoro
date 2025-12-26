@@ -5,6 +5,7 @@
 struct _PomodoroTask {
   char *id;
   char *title;
+  guint repeat_count;
   TaskStatus status;
   GDateTime *created_at;
   GDateTime *completed_at;
@@ -49,6 +50,15 @@ normalize_archive_strategy(TaskArchiveStrategy strategy)
   return strategy;
 }
 
+static guint
+normalize_repeat_count(guint repeat_count)
+{
+  if (repeat_count < 1) {
+    return 1;
+  }
+  return repeat_count;
+}
+
 TaskStore *
 task_store_new(void)
 {
@@ -89,7 +99,7 @@ task_store_get_tasks(TaskStore *store)
 }
 
 PomodoroTask *
-task_store_add(TaskStore *store, const char *title)
+task_store_add(TaskStore *store, const char *title, guint repeat_count)
 {
   if (store == NULL || title == NULL || *title == '\0') {
     return NULL;
@@ -98,6 +108,7 @@ task_store_add(TaskStore *store, const char *title)
   PomodoroTask *task = g_new0(PomodoroTask, 1);
   task->id = g_uuid_string_random();
   task->title = g_strdup(title);
+  task->repeat_count = normalize_repeat_count(repeat_count);
   task->status = TASK_STATUS_ACTIVE;
   task->created_at = g_date_time_new_now_local();
 
@@ -109,6 +120,7 @@ PomodoroTask *
 task_store_import(TaskStore *store,
                   const char *id,
                   const char *title,
+                  guint repeat_count,
                   TaskStatus status,
                   GDateTime *created_at,
                   GDateTime *completed_at,
@@ -130,6 +142,7 @@ task_store_import(TaskStore *store,
   PomodoroTask *task = g_new0(PomodoroTask, 1);
   task->id = g_strdup(id);
   task->title = g_strdup(title);
+  task->repeat_count = normalize_repeat_count(repeat_count);
   task->status = status;
   task->created_at = created_at ? created_at : g_date_time_new_now_local();
   task->completed_at = completed_at;
@@ -361,6 +374,24 @@ pomodoro_task_set_title(PomodoroTask *task, const char *title)
 
   g_free(task->title);
   task->title = trimmed;
+}
+
+guint
+pomodoro_task_get_repeat_count(const PomodoroTask *task)
+{
+  if (task == NULL) {
+    return 1;
+  }
+  return task->repeat_count > 0 ? task->repeat_count : 1;
+}
+
+void
+pomodoro_task_set_repeat_count(PomodoroTask *task, guint repeat_count)
+{
+  if (task == NULL) {
+    return;
+  }
+  task->repeat_count = normalize_repeat_count(repeat_count);
 }
 
 TaskStatus

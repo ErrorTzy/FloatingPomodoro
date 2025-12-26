@@ -163,6 +163,15 @@ task_storage_load(TaskStore *store, GError **error)
     TaskStatus status = task_status_from_string(status_value);
     g_free(status_value);
 
+    guint repeat_count = 1;
+    if (g_key_file_has_key(key_file, group, "repeat_count", NULL)) {
+      gint repeat_value =
+          g_key_file_get_integer(key_file, group, "repeat_count", NULL);
+      if (repeat_value > 0) {
+        repeat_count = (guint)repeat_value;
+      }
+    }
+
     char *created_value =
         g_key_file_get_string(key_file, group, "created_at", NULL);
     char *completed_value =
@@ -181,6 +190,7 @@ task_storage_load(TaskStore *store, GError **error)
     task_store_import(store,
                       id,
                       title,
+                      repeat_count,
                       status,
                       created_at,
                       completed_at,
@@ -257,6 +267,10 @@ task_storage_save(TaskStore *store, GError **error)
                             group,
                             "status",
                             task_status_to_string(pomodoro_task_get_status(task)));
+      g_key_file_set_integer(key_file,
+                             group,
+                             "repeat_count",
+                             (gint)pomodoro_task_get_repeat_count(task));
 
       char *created_at = format_datetime(pomodoro_task_get_created_at(task));
       char *completed_at = format_datetime(pomodoro_task_get_completed_at(task));

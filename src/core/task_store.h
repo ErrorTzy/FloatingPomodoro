@@ -29,10 +29,11 @@ void task_store_free(TaskStore *store);
 void task_store_clear(TaskStore *store);
 
 const GPtrArray *task_store_get_tasks(TaskStore *store);
-PomodoroTask *task_store_add(TaskStore *store, const char *title);
+PomodoroTask *task_store_add(TaskStore *store, const char *title, guint repeat_count);
 PomodoroTask *task_store_import(TaskStore *store,
                                 const char *id,
                                 const char *title,
+                                guint repeat_count,
                                 TaskStatus status,
                                 GDateTime *created_at,
                                 GDateTime *completed_at,
@@ -51,6 +52,8 @@ void task_store_apply_archive_policy(TaskStore *store);
 const char *pomodoro_task_get_id(const PomodoroTask *task);
 const char *pomodoro_task_get_title(const PomodoroTask *task);
 void pomodoro_task_set_title(PomodoroTask *task, const char *title);
+guint pomodoro_task_get_repeat_count(const PomodoroTask *task);
+void pomodoro_task_set_repeat_count(PomodoroTask *task, guint repeat_count);
 TaskStatus pomodoro_task_get_status(const PomodoroTask *task);
 GDateTime *pomodoro_task_get_created_at(const PomodoroTask *task);
 GDateTime *pomodoro_task_get_completed_at(const PomodoroTask *task);

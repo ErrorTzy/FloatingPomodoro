@@ -83,6 +83,10 @@ static void
 install_logging(void)
 {
   log_level_threshold = parse_log_level();
+  if (log_level_threshold >= LOG_LEVEL_INFO &&
+      g_getenv("G_MESSAGES_DEBUG") == NULL) {
+    g_setenv("G_MESSAGES_DEBUG", "all", FALSE);
+  }
   g_log_set_writer_func(pomodoro_log_writer, NULL, NULL);
 }
 
@@ -195,22 +199,17 @@ load_css(void)
   g_object_unref(provider);
 }
 
-typedef enum {
-  TASK_ACTION_COMPLETE = 0,
-  TASK_ACTION_REACTIVATE = 1,
-  TASK_ACTION_EDIT = 2,
-  TASK_ACTION_ARCHIVE = 3,
-  TASK_ACTION_DELETE = 4
-} TaskAction;
-
 typedef struct {
   TaskStore *store;
   GtkWindow *window;
   GtkWindow *settings_window;
   GtkWindow *archived_window;
+  struct _TaskRowControls *editing_controls;
   GtkWidget *task_list;
   GtkWidget *task_empty_label;
   GtkWidget *task_entry;
+  GtkWidget *task_repeat_spin;
+  GtkWidget *task_repeat_hint;
   GtkWidget *current_task_label;
   GtkWidget *current_task_meta;
 } AppState;
@@ -218,9 +217,23 @@ typedef struct {
 typedef struct {
   AppState *state;
   PomodoroTask *task;
+  PomodoroTask *active_task;
   GtkWidget *window;
-  GtkWidget *entry;
-} RenameDialog;
+  gboolean switch_active;
+} ConfirmDialog;
+
+typedef struct _TaskRowControls {
+  AppState *state;
+  PomodoroTask *task;
+  GtkWidget *repeat_label;
+  GtkWidget *count_label;
+  GtkWidget *title_label;
+  GtkWidget *title_entry;
+  GtkWidget *edit_button;
+  gboolean title_edit_active;
+  gboolean title_edit_has_focus;
+  gint64 title_edit_started_at;
+} TaskRowControls;
 
 typedef struct {
   AppState *state;
@@ -239,7 +252,6 @@ typedef struct {
   GtkWidget *empty_label;
 } ArchivedDialog;
 
-static void on_task_action_clicked(GtkButton *button, gpointer user_data);
 static void on_show_settings_clicked(GtkButton *button, gpointer user_data);
 static void on_show_archived_clicked(GtkButton *button, gpointer user_data);
 static void on_settings_strategy_changed(GObject *object,
@@ -250,6 +262,26 @@ static void settings_dialog_update_controls(SettingsDialog *dialog);
 static ArchivedDialog *archived_dialog_get(AppState *state);
 static void refresh_task_list(AppState *state);
 static void save_task_store(AppState *state);
+static void update_repeat_hint(GtkSpinButton *spin, GtkWidget *label);
+static void on_repeat_spin_changed(GtkSpinButton *spin, gpointer user_data);
+static PomodoroTask *find_active_task(TaskStore *store);
+static void on_task_status_clicked(GtkButton *button, gpointer user_data);
+static void on_task_edit_clicked(GtkButton *button, gpointer user_data);
+static void on_task_archive_clicked(GtkButton *button, gpointer user_data);
+static void on_task_restore_clicked(GtkButton *button, gpointer user_data);
+static void on_task_delete_clicked(GtkButton *button, gpointer user_data);
+static void on_window_pressed(GtkGestureClick *gesture,
+                              gint n_press,
+                              gdouble x,
+                              gdouble y,
+                              gpointer user_data);
+static void update_current_task_summary(AppState *state);
+static void show_confirm_dialog(AppState *state,
+                                const char *title_text,
+                                const char *body_text,
+                                PomodoroTask *task,
+                                PomodoroTask *active_task,
+                                gboolean switch_active);
 
 static void
 app_state_free(gpointer data)
@@ -283,17 +315,6 @@ app_state_free(gpointer data)
 }
 
 static void
-rename_dialog_free(gpointer data)
-{
-  RenameDialog *dialog = data;
-  if (dialog == NULL) {
-    return;
-  }
-
-  g_free(dialog);
-}
-
-static void
 settings_dialog_free(gpointer data)
 {
   SettingsDialog *dialog = data;
@@ -316,65 +337,83 @@ archived_dialog_free(gpointer data)
 }
 
 static void
-apply_rename_dialog(RenameDialog *dialog)
+confirm_dialog_free(gpointer data)
 {
-  if (dialog == NULL || dialog->state == NULL || dialog->task == NULL) {
+  ConfirmDialog *dialog = data;
+  if (dialog == NULL) {
     return;
   }
 
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(dialog->entry));
-  if (text != NULL) {
-    pomodoro_task_set_title(dialog->task, text);
-    task_store_apply_archive_policy(dialog->state->store);
-    save_task_store(dialog->state);
-    refresh_task_list(dialog->state);
+  g_free(dialog);
+}
+
+static void
+task_row_controls_free(gpointer data)
+{
+  TaskRowControls *controls = data;
+  if (controls == NULL) {
+    return;
   }
+
+  g_free(controls);
+}
+
+static void
+apply_confirm_dialog(ConfirmDialog *dialog)
+{
+  if (dialog == NULL || dialog->state == NULL || dialog->state->store == NULL ||
+      dialog->task == NULL) {
+    return;
+  }
+
+  if (dialog->switch_active) {
+    if (dialog->active_task != NULL && dialog->active_task != dialog->task) {
+      task_store_complete(dialog->state->store, dialog->active_task);
+    }
+    task_store_reactivate(dialog->state->store, dialog->task);
+  } else {
+    task_store_complete(dialog->state->store, dialog->task);
+  }
+
+  task_store_apply_archive_policy(dialog->state->store);
+  save_task_store(dialog->state);
+  refresh_task_list(dialog->state);
 
   gtk_window_destroy(GTK_WINDOW(dialog->window));
 }
 
 static void
-on_rename_confirm_clicked(GtkButton *button, gpointer user_data)
+on_confirm_ok_clicked(GtkButton *button, gpointer user_data)
 {
   (void)button;
-  apply_rename_dialog((RenameDialog *)user_data);
+  apply_confirm_dialog((ConfirmDialog *)user_data);
 }
 
 static void
-on_rename_entry_activate(GtkEntry *entry, gpointer user_data)
-{
-  (void)entry;
-  apply_rename_dialog((RenameDialog *)user_data);
-}
-
-static gboolean
-on_rename_window_close(GtkWindow *window, gpointer user_data)
-{
-  (void)user_data;
-  gtk_window_destroy(window);
-  return TRUE;
-}
-
-static void
-on_rename_cancel_clicked(GtkButton *button, gpointer user_data)
+on_confirm_cancel_clicked(GtkButton *button, gpointer user_data)
 {
   (void)button;
   gtk_window_destroy(GTK_WINDOW(user_data));
 }
 
 static void
-show_rename_dialog(AppState *state, PomodoroTask *task)
+show_confirm_dialog(AppState *state,
+                    const char *title_text,
+                    const char *body_text,
+                    PomodoroTask *task,
+                    PomodoroTask *active_task,
+                    gboolean switch_active)
 {
   if (state == NULL || task == NULL) {
     return;
   }
 
   GtkWidget *dialog = gtk_window_new();
-  gtk_window_set_title(GTK_WINDOW(dialog), "Rename Task");
+  gtk_window_set_title(GTK_WINDOW(dialog), title_text);
   gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
   gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
   gtk_window_set_transient_for(GTK_WINDOW(dialog), state->window);
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 360, 140);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 420, 180);
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
   gtk_widget_set_margin_top(root, 16);
@@ -382,14 +421,14 @@ show_rename_dialog(AppState *state, PomodoroTask *task)
   gtk_widget_set_margin_start(root, 16);
   gtk_widget_set_margin_end(root, 16);
 
-  GtkWidget *label = gtk_label_new("Update the task name");
-  gtk_widget_add_css_class(label, "card-title");
-  gtk_widget_set_halign(label, GTK_ALIGN_START);
+  GtkWidget *title = gtk_label_new(title_text);
+  gtk_widget_add_css_class(title, "card-title");
+  gtk_widget_set_halign(title, GTK_ALIGN_START);
 
-  GtkWidget *entry = gtk_entry_new();
-  gtk_editable_set_text(GTK_EDITABLE(entry), pomodoro_task_get_title(task));
-  gtk_widget_set_hexpand(entry, TRUE);
-  gtk_widget_add_css_class(entry, "task-entry");
+  GtkWidget *body = gtk_label_new(body_text);
+  gtk_widget_add_css_class(body, "task-meta");
+  gtk_widget_set_halign(body, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(body), TRUE);
 
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_halign(actions, GTK_ALIGN_END);
@@ -398,46 +437,39 @@ show_rename_dialog(AppState *state, PomodoroTask *task)
   gtk_widget_add_css_class(cancel, "btn-secondary");
   gtk_widget_add_css_class(cancel, "btn-compact");
 
-  GtkWidget *save = gtk_button_new_with_label("Save");
-  gtk_widget_add_css_class(save, "btn-primary");
-  gtk_widget_add_css_class(save, "btn-compact");
+  GtkWidget *confirm = gtk_button_new_with_label("Confirm");
+  gtk_widget_add_css_class(confirm, "btn-primary");
+  gtk_widget_add_css_class(confirm, "btn-compact");
 
   gtk_box_append(GTK_BOX(actions), cancel);
-  gtk_box_append(GTK_BOX(actions), save);
+  gtk_box_append(GTK_BOX(actions), confirm);
 
-  gtk_box_append(GTK_BOX(root), label);
-  gtk_box_append(GTK_BOX(root), entry);
+  gtk_box_append(GTK_BOX(root), title);
+  gtk_box_append(GTK_BOX(root), body);
   gtk_box_append(GTK_BOX(root), actions);
 
   gtk_window_set_child(GTK_WINDOW(dialog), root);
 
-  RenameDialog *dialog_state = g_new0(RenameDialog, 1);
+  ConfirmDialog *dialog_state = g_new0(ConfirmDialog, 1);
   dialog_state->state = state;
   dialog_state->task = task;
+  dialog_state->active_task = active_task;
   dialog_state->window = dialog;
-  dialog_state->entry = entry;
+  dialog_state->switch_active = switch_active;
 
   g_object_set_data_full(G_OBJECT(dialog),
-                         "rename-dialog",
+                         "confirm-dialog",
                          dialog_state,
-                         rename_dialog_free);
+                         confirm_dialog_free);
 
   g_signal_connect(cancel,
                    "clicked",
-                   G_CALLBACK(on_rename_cancel_clicked),
+                   G_CALLBACK(on_confirm_cancel_clicked),
                    dialog);
-  g_signal_connect(save,
+  g_signal_connect(confirm,
                    "clicked",
-                   G_CALLBACK(on_rename_confirm_clicked),
+                   G_CALLBACK(on_confirm_ok_clicked),
                    dialog_state);
-  g_signal_connect(entry,
-                   "activate",
-                   G_CALLBACK(on_rename_entry_activate),
-                   dialog_state);
-  g_signal_connect(dialog,
-                   "close-request",
-                   G_CALLBACK(on_rename_window_close),
-                   NULL);
 
   gtk_window_present(GTK_WINDOW(dialog));
 }
@@ -701,6 +733,367 @@ save_task_store(AppState *state)
   }
 }
 
+static PomodoroTask *
+find_active_task(TaskStore *store)
+{
+  if (store == NULL) {
+    return NULL;
+  }
+
+  const GPtrArray *tasks = task_store_get_tasks(store);
+  if (tasks == NULL) {
+    return NULL;
+  }
+
+  for (guint i = 0; i < tasks->len; i++) {
+    PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
+    if (task != NULL && pomodoro_task_get_status(task) == TASK_STATUS_ACTIVE) {
+      return task;
+    }
+  }
+
+  return NULL;
+}
+
+static guint
+calculate_cycle_minutes(guint cycles)
+{
+  const guint focus_minutes = 25;
+  const guint short_break_minutes = 5;
+  const guint long_break_minutes = 15;
+  const guint long_break_interval = 4;
+
+  if (cycles < 1) {
+    cycles = 1;
+  }
+
+  guint total = cycles * focus_minutes;
+  guint breaks = cycles;
+  guint long_breaks = breaks / long_break_interval;
+  guint short_breaks = breaks - long_breaks;
+
+  total += short_breaks * short_break_minutes;
+  total += long_breaks * long_break_minutes;
+
+  return total;
+}
+
+static char *
+format_minutes(guint minutes)
+{
+  guint hours = minutes / 60;
+  guint mins = minutes % 60;
+
+  if (hours == 0) {
+    return g_strdup_printf("%um", mins);
+  }
+
+  if (mins == 0) {
+    return g_strdup_printf("%uh", hours);
+  }
+
+  return g_strdup_printf("%uh %um", hours, mins);
+}
+
+static char *
+format_cycle_summary(guint cycles)
+{
+  if (cycles < 1) {
+    cycles = 1;
+  }
+
+  char *duration = format_minutes(calculate_cycle_minutes(cycles));
+  char *text = g_strdup_printf("%u cycle%s - %s total",
+                               cycles,
+                               cycles == 1 ? "" : "s",
+                               duration);
+  g_free(duration);
+  return text;
+}
+
+static void
+update_repeat_hint(GtkSpinButton *spin, GtkWidget *label)
+{
+  if (spin == NULL || label == NULL) {
+    return;
+  }
+
+  guint cycles = (guint)gtk_spin_button_get_value_as_int(spin);
+  char *duration = format_minutes(calculate_cycle_minutes(cycles));
+  char *text = g_strdup_printf("Estimated total (focus + breaks): %s", duration);
+  gtk_label_set_text(GTK_LABEL(label), text);
+  g_free(duration);
+  g_free(text);
+}
+
+static void
+on_repeat_spin_changed(GtkSpinButton *spin, gpointer user_data)
+{
+  update_repeat_hint(spin, GTK_WIDGET(user_data));
+}
+
+static char *
+format_repeat_label(guint repeat_count)
+{
+  return format_cycle_summary(repeat_count);
+}
+
+static void
+update_task_cycle_ui(TaskRowControls *controls)
+{
+  if (controls == NULL || controls->task == NULL) {
+    return;
+  }
+
+  guint cycles = pomodoro_task_get_repeat_count(controls->task);
+
+  if (controls->count_label != NULL) {
+    char *count = g_strdup_printf("%u", cycles);
+    gtk_label_set_text(GTK_LABEL(controls->count_label), count);
+    g_free(count);
+  }
+
+  if (controls->repeat_label != NULL) {
+    char *summary = format_cycle_summary(cycles);
+    gtk_label_set_text(GTK_LABEL(controls->repeat_label), summary);
+    g_free(summary);
+  }
+}
+
+static void
+set_task_cycles(TaskRowControls *controls, guint cycles)
+{
+  if (controls == NULL || controls->task == NULL) {
+    return;
+  }
+
+  pomodoro_task_set_repeat_count(controls->task, cycles);
+  update_task_cycle_ui(controls);
+
+  if (controls->state != NULL) {
+    save_task_store(controls->state);
+    update_current_task_summary(controls->state);
+  }
+}
+
+static void
+on_task_cycle_decrement(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TaskRowControls *controls = user_data;
+  if (controls == NULL || controls->task == NULL) {
+    return;
+  }
+
+  guint cycles = pomodoro_task_get_repeat_count(controls->task);
+  if (cycles > 1) {
+    set_task_cycles(controls, cycles - 1);
+  }
+}
+
+static void
+on_task_cycle_increment(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TaskRowControls *controls = user_data;
+  if (controls == NULL || controls->task == NULL) {
+    return;
+  }
+
+  guint cycles = pomodoro_task_get_repeat_count(controls->task);
+  if (cycles < 99) {
+    set_task_cycles(controls, cycles + 1);
+  }
+}
+
+static gboolean
+focus_title_entry_idle(gpointer data)
+{
+  GtkWidget *entry = data;
+  if (entry != NULL && gtk_widget_get_visible(entry)) {
+    gtk_widget_grab_focus(entry);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+static void
+set_editing_controls(AppState *state, TaskRowControls *controls)
+{
+  if (state == NULL) {
+    return;
+  }
+
+  state->editing_controls = controls;
+}
+
+static void
+apply_task_title_edit(TaskRowControls *controls)
+{
+  if (controls == NULL || controls->task == NULL ||
+      controls->title_entry == NULL || controls->title_label == NULL) {
+    g_warning("apply_task_title_edit: missing controls or widgets");
+    return;
+  }
+
+  if (!gtk_widget_get_visible(controls->title_entry)) {
+    g_debug("apply_task_title_edit: entry not visible; skipping");
+    return;
+  }
+
+  const char *text = gtk_editable_get_text(GTK_EDITABLE(controls->title_entry));
+  if (text == NULL) {
+    text = "";
+  }
+
+  char *trimmed = g_strstrip(g_strdup(text));
+  if (trimmed[0] == '\0') {
+    g_free(trimmed);
+    trimmed = g_strdup(pomodoro_task_get_title(controls->task));
+  }
+
+  const char *current = pomodoro_task_get_title(controls->task);
+  if (g_strcmp0(current, trimmed) != 0) {
+    g_info("Updating task title to '%s'", trimmed);
+    pomodoro_task_set_title(controls->task, trimmed);
+  } else {
+    g_debug("Task title unchanged");
+  }
+
+  gtk_label_set_text(GTK_LABEL(controls->title_label), trimmed);
+  gtk_editable_set_text(GTK_EDITABLE(controls->title_entry), trimmed);
+
+  gtk_widget_set_visible(controls->title_entry, FALSE);
+  gtk_widget_set_visible(controls->title_label, TRUE);
+  controls->title_edit_active = FALSE;
+  controls->title_edit_has_focus = FALSE;
+  controls->title_edit_started_at = 0;
+
+  g_free(trimmed);
+
+  if (controls->state != NULL) {
+    if (controls->state->editing_controls == controls) {
+      set_editing_controls(controls->state, NULL);
+    }
+    save_task_store(controls->state);
+    update_current_task_summary(controls->state);
+  }
+}
+
+static void
+start_task_title_edit(TaskRowControls *controls)
+{
+  if (controls == NULL || controls->task == NULL ||
+      controls->title_entry == NULL || controls->title_label == NULL) {
+    g_warning("start_task_title_edit: missing controls or widgets");
+    return;
+  }
+
+  if (controls->state != NULL &&
+      controls->state->editing_controls != NULL &&
+      controls->state->editing_controls != controls) {
+    apply_task_title_edit(controls->state->editing_controls);
+  }
+
+  g_info("Entering inline edit for task '%s'",
+         pomodoro_task_get_title(controls->task));
+  if (controls->state != NULL) {
+    set_editing_controls(controls->state, controls);
+  }
+  controls->title_edit_active = TRUE;
+  controls->title_edit_has_focus = FALSE;
+  controls->title_edit_started_at = g_get_monotonic_time();
+  gtk_editable_set_text(GTK_EDITABLE(controls->title_entry),
+                        pomodoro_task_get_title(controls->task));
+  gtk_widget_set_visible(controls->title_label, FALSE);
+  gtk_widget_set_visible(controls->title_entry, TRUE);
+  gtk_widget_grab_focus(controls->title_entry);
+  gtk_editable_set_position(GTK_EDITABLE(controls->title_entry), -1);
+  g_idle_add(focus_title_entry_idle, controls->title_entry);
+}
+
+static void
+on_task_title_activate(GtkEntry *entry, gpointer user_data)
+{
+  (void)entry;
+  g_debug("Inline task title activated");
+  apply_task_title_edit((TaskRowControls *)user_data);
+}
+
+static void
+on_task_title_focus_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
+{
+  (void)pspec;
+  GtkWidget *entry = GTK_WIDGET(object);
+  TaskRowControls *controls = user_data;
+  if (gtk_widget_has_focus(entry)) {
+    if (controls != NULL) {
+      controls->title_edit_has_focus = TRUE;
+    }
+    g_debug("Inline task title gained focus");
+    return;
+  }
+
+  if (controls == NULL || !controls->title_edit_active) {
+    return;
+  }
+
+  if (!controls->title_edit_has_focus) {
+    g_debug("Inline task title lost focus before gaining focus; ignoring");
+    return;
+  }
+
+  if (controls->title_edit_started_at > 0) {
+    gint64 elapsed = g_get_monotonic_time() - controls->title_edit_started_at;
+    if (elapsed < 250000) {
+      g_debug("Inline task title lost focus too quickly; ignoring");
+      return;
+    }
+  }
+
+  g_debug("Inline task title lost focus");
+  apply_task_title_edit(controls);
+}
+
+static void
+on_window_pressed(GtkGestureClick *gesture,
+                  gint n_press,
+                  gdouble x,
+                  gdouble y,
+                  gpointer user_data)
+{
+  (void)n_press;
+  AppState *state = user_data;
+  if (state == NULL || state->editing_controls == NULL) {
+    return;
+  }
+
+  TaskRowControls *controls = state->editing_controls;
+  if (controls->title_entry == NULL ||
+      !gtk_widget_get_visible(controls->title_entry)) {
+    return;
+  }
+
+  GtkWidget *root = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+  GtkWidget *target = gtk_widget_pick(root, x, y, GTK_PICK_DEFAULT);
+  if (target == NULL) {
+    return;
+  }
+
+  if (target == controls->title_entry ||
+      gtk_widget_is_ancestor(target, controls->title_entry)) {
+    return;
+  }
+
+  if (controls->edit_button != NULL &&
+      (target == controls->edit_button ||
+       gtk_widget_is_ancestor(target, controls->edit_button))) {
+    return;
+  }
+
+  g_debug("Window click outside title entry; applying inline edit");
+  apply_task_title_edit(controls);
+}
+
 static void
 update_current_task_summary(AppState *state)
 {
@@ -708,25 +1101,19 @@ update_current_task_summary(AppState *state)
     return;
   }
 
-  const GPtrArray *tasks = task_store_get_tasks(state->store);
-  const PomodoroTask *active_task = NULL;
-
-  if (tasks != NULL) {
-    for (guint i = 0; i < tasks->len; i++) {
-      PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
-      if (task != NULL && pomodoro_task_get_status(task) == TASK_STATUS_ACTIVE) {
-        active_task = task;
-        break;
-      }
-    }
-  }
+  const PomodoroTask *active_task = find_active_task(state->store);
 
   if (active_task != NULL) {
     gtk_label_set_text(GTK_LABEL(state->current_task_label),
                        pomodoro_task_get_title(active_task));
     if (state->current_task_meta != NULL) {
-      gtk_label_set_text(GTK_LABEL(state->current_task_meta),
-                         "Ready for the next focus session");
+      char *repeat_text =
+          format_repeat_label(pomodoro_task_get_repeat_count(active_task));
+      char *meta_text =
+          g_strdup_printf("%s. Ready for the next focus session", repeat_text);
+      gtk_label_set_text(GTK_LABEL(state->current_task_meta), meta_text);
+      g_free(repeat_text);
+      g_free(meta_text);
     }
   } else {
     gtk_label_set_text(GTK_LABEL(state->current_task_label), "No active task");
@@ -735,125 +1122,6 @@ update_current_task_summary(AppState *state)
                          "Add a task below or reactivate a completed one");
     }
   }
-}
-
-static GtkWidget *
-build_task_action_menu(AppState *state, PomodoroTask *task)
-{
-  GtkWidget *menu_button = gtk_menu_button_new();
-  gtk_widget_add_css_class(menu_button, "btn-secondary");
-  gtk_widget_add_css_class(menu_button, "btn-compact");
-
-  GtkWidget *label = gtk_label_new("Actions");
-  gtk_menu_button_set_child(GTK_MENU_BUTTON(menu_button), label);
-
-  GtkWidget *popover = gtk_popover_new();
-  gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
-
-  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-  gtk_widget_set_margin_top(box, 8);
-  gtk_widget_set_margin_bottom(box, 8);
-  gtk_widget_set_margin_start(box, 8);
-  gtk_widget_set_margin_end(box, 8);
-
-  TaskStatus status = pomodoro_task_get_status(task);
-
-  GtkWidget *edit_button = gtk_button_new_with_label("Edit");
-  gtk_widget_add_css_class(edit_button, "btn-secondary");
-  gtk_widget_add_css_class(edit_button, "btn-compact");
-  g_object_set_data(G_OBJECT(edit_button), "task", task);
-  g_object_set_data(G_OBJECT(edit_button),
-                    "task-action",
-                    GINT_TO_POINTER(TASK_ACTION_EDIT));
-  g_object_set_data(G_OBJECT(edit_button), "popover", popover);
-  g_signal_connect(edit_button,
-                   "clicked",
-                   G_CALLBACK(on_task_action_clicked),
-                   state);
-  gtk_box_append(GTK_BOX(box), edit_button);
-
-  if (status == TASK_STATUS_ACTIVE) {
-    GtkWidget *complete_button = gtk_button_new_with_label("Complete");
-    gtk_widget_add_css_class(complete_button, "btn-secondary");
-    gtk_widget_add_css_class(complete_button, "btn-compact");
-    g_object_set_data(G_OBJECT(complete_button), "task", task);
-    g_object_set_data(G_OBJECT(complete_button),
-                      "task-action",
-                      GINT_TO_POINTER(TASK_ACTION_COMPLETE));
-    g_object_set_data(G_OBJECT(complete_button), "popover", popover);
-    g_signal_connect(complete_button,
-                     "clicked",
-                     G_CALLBACK(on_task_action_clicked),
-                     state);
-    gtk_box_append(GTK_BOX(box), complete_button);
-  }
-
-  if (status == TASK_STATUS_COMPLETED) {
-    GtkWidget *reactivate_button = gtk_button_new_with_label("Reactivate");
-    gtk_widget_add_css_class(reactivate_button, "btn-primary");
-    gtk_widget_add_css_class(reactivate_button, "btn-compact");
-    g_object_set_data(G_OBJECT(reactivate_button), "task", task);
-    g_object_set_data(G_OBJECT(reactivate_button),
-                      "task-action",
-                      GINT_TO_POINTER(TASK_ACTION_REACTIVATE));
-    g_object_set_data(G_OBJECT(reactivate_button), "popover", popover);
-    g_signal_connect(reactivate_button,
-                     "clicked",
-                     G_CALLBACK(on_task_action_clicked),
-                     state);
-    gtk_box_append(GTK_BOX(box), reactivate_button);
-  }
-
-  if (status == TASK_STATUS_ARCHIVED) {
-    GtkWidget *restore_button = gtk_button_new_with_label("Restore");
-    gtk_widget_add_css_class(restore_button, "btn-primary");
-    gtk_widget_add_css_class(restore_button, "btn-compact");
-    g_object_set_data(G_OBJECT(restore_button), "task", task);
-    g_object_set_data(G_OBJECT(restore_button),
-                      "task-action",
-                      GINT_TO_POINTER(TASK_ACTION_REACTIVATE));
-    g_object_set_data(G_OBJECT(restore_button), "popover", popover);
-    g_signal_connect(restore_button,
-                     "clicked",
-                     G_CALLBACK(on_task_action_clicked),
-                     state);
-    gtk_box_append(GTK_BOX(box), restore_button);
-  }
-
-  if (status != TASK_STATUS_ARCHIVED) {
-    GtkWidget *archive_button = gtk_button_new_with_label("Archive");
-    gtk_widget_add_css_class(archive_button, "btn-secondary");
-    gtk_widget_add_css_class(archive_button, "btn-compact");
-    g_object_set_data(G_OBJECT(archive_button), "task", task);
-    g_object_set_data(G_OBJECT(archive_button),
-                      "task-action",
-                      GINT_TO_POINTER(TASK_ACTION_ARCHIVE));
-    g_object_set_data(G_OBJECT(archive_button), "popover", popover);
-    g_signal_connect(archive_button,
-                     "clicked",
-                     G_CALLBACK(on_task_action_clicked),
-                     state);
-    gtk_box_append(GTK_BOX(box), archive_button);
-  }
-
-  GtkWidget *delete_button = gtk_button_new_with_label("Delete");
-  gtk_widget_add_css_class(delete_button, "btn-danger");
-  gtk_widget_add_css_class(delete_button, "btn-compact");
-  g_object_set_data(G_OBJECT(delete_button), "task", task);
-  g_object_set_data(G_OBJECT(delete_button),
-                    "task-action",
-                    GINT_TO_POINTER(TASK_ACTION_DELETE));
-  g_object_set_data(G_OBJECT(delete_button), "popover", popover);
-  g_signal_connect(delete_button,
-                   "clicked",
-                   G_CALLBACK(on_task_action_clicked),
-                   state);
-  gtk_box_append(GTK_BOX(box), delete_button);
-
-  gtk_popover_set_child(GTK_POPOVER(popover), box);
-  gtk_menu_button_set_popover(GTK_MENU_BUTTON(menu_button), popover);
-
-  return menu_button;
 }
 
 static void
@@ -868,6 +1136,9 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
   gtk_widget_add_css_class(row, "task-row");
 
+  GtkWidget *text_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_widget_set_hexpand(text_box, TRUE);
+
   GtkWidget *title = gtk_label_new(pomodoro_task_get_title(task));
   gtk_widget_add_css_class(title, "task-item");
   gtk_widget_set_halign(title, GTK_ALIGN_START);
@@ -875,25 +1146,160 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   gtk_label_set_wrap(GTK_LABEL(title), TRUE);
   gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
 
+  GtkWidget *title_entry = gtk_entry_new();
+  gtk_editable_set_text(GTK_EDITABLE(title_entry), pomodoro_task_get_title(task));
+  gtk_widget_add_css_class(title_entry, "task-title-entry");
+  gtk_widget_set_hexpand(title_entry, TRUE);
+  gtk_widget_set_visible(title_entry, FALSE);
+
+  char *repeat_text = format_repeat_label(pomodoro_task_get_repeat_count(task));
+  GtkWidget *repeat_label = gtk_label_new(repeat_text);
+  gtk_widget_add_css_class(repeat_label, "task-meta");
+  gtk_widget_set_halign(repeat_label, GTK_ALIGN_START);
+  gtk_label_set_xalign(GTK_LABEL(repeat_label), 0.0f);
+  gtk_label_set_ellipsize(GTK_LABEL(repeat_label), PANGO_ELLIPSIZE_END);
+  g_free(repeat_text);
+
+  GtkWidget *cycle_stepper = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_widget_add_css_class(cycle_stepper, "cycle-stepper");
+  gtk_widget_set_valign(cycle_stepper, GTK_ALIGN_CENTER);
+
+  GtkWidget *decrement_button = gtk_button_new_with_label("-");
+  gtk_widget_add_css_class(decrement_button, "stepper-button");
+
+  GtkWidget *count_label = gtk_label_new("");
+  gtk_widget_add_css_class(count_label, "task-cycle-count");
+  gtk_widget_set_size_request(count_label, 28, -1);
+  gtk_widget_set_halign(count_label, GTK_ALIGN_CENTER);
+
+  GtkWidget *increment_button = gtk_button_new_with_label("+");
+  gtk_widget_add_css_class(increment_button, "stepper-button");
+
+  gtk_box_append(GTK_BOX(cycle_stepper), decrement_button);
+  gtk_box_append(GTK_BOX(cycle_stepper), count_label);
+  gtk_box_append(GTK_BOX(cycle_stepper), increment_button);
+
+  if (status == TASK_STATUS_ARCHIVED) {
+    gtk_widget_set_sensitive(cycle_stepper, FALSE);
+  }
+
   const char *status_text = "Active";
   if (status == TASK_STATUS_COMPLETED) {
-    status_text = "Completed";
+    status_text = "Complete";
   } else if (status == TASK_STATUS_ARCHIVED) {
     status_text = "Archived";
   }
 
-  GtkWidget *status_tag = gtk_label_new(status_text);
-  gtk_widget_add_css_class(status_tag, "tag");
+  GtkWidget *status_button = gtk_button_new_with_label(status_text);
+  gtk_widget_add_css_class(status_button, "task-status");
+  gtk_widget_add_css_class(status_button, "tag");
+  gtk_widget_set_valign(status_button, GTK_ALIGN_CENTER);
   if (status == TASK_STATUS_COMPLETED) {
-    gtk_widget_add_css_class(status_tag, "tag-success");
+    gtk_widget_add_css_class(status_button, "tag-success");
   } else if (status == TASK_STATUS_ARCHIVED) {
-    gtk_widget_add_css_class(status_tag, "tag-muted");
+    gtk_widget_add_css_class(status_button, "tag-muted");
+    gtk_widget_set_sensitive(status_button, FALSE);
+  }
+  g_object_set_data(G_OBJECT(status_button), "task", task);
+  g_signal_connect(status_button,
+                   "clicked",
+                   G_CALLBACK(on_task_status_clicked),
+                   state);
+
+  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
+
+  GtkWidget *edit_button = gtk_button_new();
+  GtkWidget *edit_icon = gtk_image_new_from_icon_name("document-edit-symbolic");
+  gtk_button_set_child(GTK_BUTTON(edit_button), edit_icon);
+  gtk_widget_add_css_class(edit_button, "icon-button");
+  gtk_widget_set_tooltip_text(edit_button, "Edit task");
+  g_object_set_data(G_OBJECT(edit_button), "task", task);
+  gtk_box_append(GTK_BOX(actions), edit_button);
+
+  if (status == TASK_STATUS_ARCHIVED) {
+    GtkWidget *restore_button = gtk_button_new();
+    GtkWidget *restore_icon = gtk_image_new_from_icon_name("edit-undo-symbolic");
+    gtk_button_set_child(GTK_BUTTON(restore_button), restore_icon);
+    gtk_widget_add_css_class(restore_button, "icon-button");
+    gtk_widget_set_tooltip_text(restore_button, "Restore task");
+    g_object_set_data(G_OBJECT(restore_button), "task", task);
+    g_signal_connect(restore_button,
+                     "clicked",
+                     G_CALLBACK(on_task_restore_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(actions), restore_button);
+  } else {
+    GtkWidget *archive_button = gtk_button_new();
+    GtkWidget *archive_icon = gtk_image_new_from_icon_name("archive-symbolic");
+    gtk_button_set_child(GTK_BUTTON(archive_button), archive_icon);
+    gtk_widget_add_css_class(archive_button, "icon-button");
+    gtk_widget_set_tooltip_text(archive_button, "Archive task");
+    g_object_set_data(G_OBJECT(archive_button), "task", task);
+    g_signal_connect(archive_button,
+                     "clicked",
+                     G_CALLBACK(on_task_archive_clicked),
+                     state);
+    gtk_box_append(GTK_BOX(actions), archive_button);
   }
 
-  GtkWidget *actions = build_task_action_menu(state, task);
+  GtkWidget *delete_button = gtk_button_new();
+  GtkWidget *delete_icon = gtk_image_new_from_icon_name("window-close-symbolic");
+  gtk_button_set_child(GTK_BUTTON(delete_button), delete_icon);
+  gtk_widget_add_css_class(delete_button, "icon-button");
+  gtk_widget_add_css_class(delete_button, "icon-danger");
+  gtk_widget_set_tooltip_text(delete_button, "Delete task");
+  g_object_set_data(G_OBJECT(delete_button), "task", task);
+  g_signal_connect(delete_button,
+                   "clicked",
+                   G_CALLBACK(on_task_delete_clicked),
+                   state);
+  gtk_box_append(GTK_BOX(actions), delete_button);
 
-  gtk_box_append(GTK_BOX(row), title);
-  gtk_box_append(GTK_BOX(row), status_tag);
+  TaskRowControls *controls = g_new0(TaskRowControls, 1);
+  controls->state = state;
+  controls->task = task;
+  controls->repeat_label = repeat_label;
+  controls->count_label = count_label;
+  controls->title_label = title;
+  controls->title_entry = title_entry;
+  controls->edit_button = edit_button;
+  controls->title_edit_active = FALSE;
+  controls->title_edit_has_focus = FALSE;
+  controls->title_edit_started_at = 0;
+
+  g_object_set_data_full(G_OBJECT(row),
+                         "task-row-controls",
+                         controls,
+                         task_row_controls_free);
+  g_signal_connect(decrement_button,
+                   "clicked",
+                   G_CALLBACK(on_task_cycle_decrement),
+                   controls);
+  g_signal_connect(increment_button,
+                   "clicked",
+                   G_CALLBACK(on_task_cycle_increment),
+                   controls);
+  g_signal_connect(edit_button,
+                   "clicked",
+                   G_CALLBACK(on_task_edit_clicked),
+                   controls);
+  g_signal_connect(title_entry,
+                   "activate",
+                   G_CALLBACK(on_task_title_activate),
+                   controls);
+  g_signal_connect(title_entry,
+                   "notify::has-focus",
+                   G_CALLBACK(on_task_title_focus_changed),
+                   controls);
+  update_task_cycle_ui(controls);
+
+  gtk_box_append(GTK_BOX(text_box), title);
+  gtk_box_append(GTK_BOX(text_box), title_entry);
+  gtk_box_append(GTK_BOX(text_box), repeat_label);
+  gtk_box_append(GTK_BOX(row), text_box);
+  gtk_box_append(GTK_BOX(row), cycle_stepper);
+  gtk_box_append(GTK_BOX(row), status_button);
   gtk_box_append(GTK_BOX(row), actions);
 
   gtk_list_box_append(GTK_LIST_BOX(list), row);
@@ -1054,7 +1460,8 @@ settings_dialog_apply(SettingsDialog *dialog)
 static void
 handle_add_task(AppState *state)
 {
-  if (state == NULL || state->task_entry == NULL) {
+  if (state == NULL || state->task_entry == NULL ||
+      state->task_repeat_spin == NULL) {
     return;
   }
 
@@ -1070,7 +1477,9 @@ handle_add_task(AppState *state)
     return;
   }
 
-  task_store_add(state->store, trimmed);
+  guint repeat_count =
+      (guint)gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(state->task_repeat_spin));
+  task_store_add(state->store, trimmed, repeat_count);
   task_store_apply_archive_policy(state->store);
   save_task_store(state);
 
@@ -1095,7 +1504,7 @@ on_task_entry_activate(GtkEntry *entry, gpointer user_data)
 }
 
 static void
-on_task_action_clicked(GtkButton *button, gpointer user_data)
+on_task_status_clicked(GtkButton *button, gpointer user_data)
 {
   AppState *state = user_data;
   if (state == NULL || button == NULL) {
@@ -1103,39 +1512,104 @@ on_task_action_clicked(GtkButton *button, gpointer user_data)
   }
 
   PomodoroTask *task = g_object_get_data(G_OBJECT(button), "task");
-  TaskAction action =
-      GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "task-action"));
-  GtkWidget *popover = g_object_get_data(G_OBJECT(button), "popover");
-
   if (task == NULL) {
     return;
   }
 
-  if (popover != NULL) {
-    gtk_popover_popdown(GTK_POPOVER(popover));
-  }
+  TaskStatus status = pomodoro_task_get_status(task);
 
-  if (action == TASK_ACTION_EDIT) {
-    show_rename_dialog(state, task);
+  if (status == TASK_STATUS_ACTIVE) {
+    show_confirm_dialog(state,
+                        "Complete task?",
+                        "Are you sure you want to complete this task?",
+                        task,
+                        NULL,
+                        FALSE);
     return;
   }
 
-  if (action == TASK_ACTION_DELETE) {
-    task_store_remove(state->store, task);
-    save_task_store(state);
-    refresh_task_list(state);
+  if (status == TASK_STATUS_COMPLETED) {
+    PomodoroTask *active_task = find_active_task(state->store);
+    if (active_task == NULL) {
+      task_store_reactivate(state->store, task);
+      task_store_apply_archive_policy(state->store);
+      save_task_store(state);
+      refresh_task_list(state);
+      return;
+    }
+
+    show_confirm_dialog(
+        state,
+        "Switch active task?",
+        "Are you sure you want to complete the current task and set this task to active state?",
+        task,
+        active_task,
+        TRUE);
+  }
+}
+
+static void
+on_task_edit_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TaskRowControls *controls = user_data;
+  if (controls == NULL || controls->task == NULL) {
+    g_warning("Edit clicked but task controls are missing");
     return;
   }
 
-  if (action == TASK_ACTION_ARCHIVE) {
-    task_store_archive_task(state->store, task);
-  } else if (action == TASK_ACTION_REACTIVATE) {
-    task_store_reactivate(state->store, task);
+  g_debug("Edit icon clicked for task '%s'",
+          pomodoro_task_get_title(controls->task));
+  if (controls->title_entry != NULL &&
+      gtk_widget_get_visible(controls->title_entry)) {
+    g_debug("Edit already active; applying inline edit");
+    apply_task_title_edit(controls);
   } else {
-    task_store_complete(state->store, task);
+    g_debug("Starting inline edit");
+    start_task_title_edit(controls);
+  }
+}
+
+static void
+on_task_archive_clicked(GtkButton *button, gpointer user_data)
+{
+  AppState *state = user_data;
+  PomodoroTask *task = g_object_get_data(G_OBJECT(button), "task");
+  if (state == NULL || task == NULL) {
+    return;
   }
 
+  task_store_archive_task(state->store, task);
   task_store_apply_archive_policy(state->store);
+  save_task_store(state);
+  refresh_task_list(state);
+}
+
+static void
+on_task_restore_clicked(GtkButton *button, gpointer user_data)
+{
+  AppState *state = user_data;
+  PomodoroTask *task = g_object_get_data(G_OBJECT(button), "task");
+  if (state == NULL || task == NULL) {
+    return;
+  }
+
+  task_store_reactivate(state->store, task);
+  task_store_apply_archive_policy(state->store);
+  save_task_store(state);
+  refresh_task_list(state);
+}
+
+static void
+on_task_delete_clicked(GtkButton *button, gpointer user_data)
+{
+  AppState *state = user_data;
+  PomodoroTask *task = g_object_get_data(G_OBJECT(button), "task");
+  if (state == NULL || task == NULL) {
+    return;
+  }
+
+  task_store_remove(state->store, task);
   save_task_store(state);
   refresh_task_list(state);
 }
@@ -1223,6 +1697,16 @@ on_activate(GtkApplication *app, gpointer user_data)
   state->store = store;
   state->window = GTK_WINDOW(window);
   g_object_set_data_full(G_OBJECT(window), "app-state", state, app_state_free);
+
+  GtkGesture *window_click = gtk_gesture_click_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(window_click), 0);
+  gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(window_click),
+                                             GTK_PHASE_CAPTURE);
+  g_signal_connect(window_click,
+                   "pressed",
+                   G_CALLBACK(on_window_pressed),
+                   state);
+  gtk_widget_add_controller(window, GTK_EVENT_CONTROLLER(window_click));
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 20);
   gtk_widget_add_css_class(root, "app-root");
@@ -1370,11 +1854,16 @@ on_activate(GtkApplication *app, gpointer user_data)
   gtk_widget_add_css_class(tasks_title, "card-title");
   gtk_widget_set_halign(tasks_title, GTK_ALIGN_START);
 
+  GtkWidget *task_input_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_hexpand(task_input_box, TRUE);
+
   GtkWidget *task_input_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_widget_set_hexpand(task_input_row, TRUE);
+  gtk_widget_add_css_class(task_input_row, "task-input-row");
 
   GtkWidget *task_entry = gtk_entry_new();
   gtk_widget_set_hexpand(task_entry, TRUE);
+  gtk_widget_set_valign(task_entry, GTK_ALIGN_CENTER);
   gtk_entry_set_placeholder_text(GTK_ENTRY(task_entry),
                                  "Add a task for the next focus block");
   gtk_widget_add_css_class(task_entry, "task-entry");
@@ -1386,7 +1875,8 @@ on_activate(GtkApplication *app, gpointer user_data)
 
   GtkWidget *task_add_button = gtk_button_new_with_label("Add");
   gtk_widget_add_css_class(task_add_button, "btn-primary");
-  gtk_widget_add_css_class(task_add_button, "btn-compact");
+  gtk_widget_add_css_class(task_add_button, "task-add");
+  gtk_widget_set_valign(task_add_button, GTK_ALIGN_CENTER);
   g_signal_connect(task_add_button,
                    "clicked",
                    G_CALLBACK(on_add_task_clicked),
@@ -1394,6 +1884,50 @@ on_activate(GtkApplication *app, gpointer user_data)
 
   gtk_box_append(GTK_BOX(task_input_row), task_entry);
   gtk_box_append(GTK_BOX(task_input_row), task_add_button);
+
+  GtkWidget *task_meta_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_set_hexpand(task_meta_row, TRUE);
+  gtk_widget_add_css_class(task_meta_row, "task-input-meta");
+
+  GtkWidget *repeat_group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(repeat_group, GTK_ALIGN_START);
+  gtk_widget_add_css_class(repeat_group, "task-repeat-group");
+
+  GtkWidget *repeat_label = gtk_label_new("Cycles");
+  gtk_widget_add_css_class(repeat_label, "task-meta");
+
+  GtkAdjustment *repeat_adjustment = gtk_adjustment_new(1, 1, 99, 1, 5, 0);
+  GtkWidget *repeat_spin = gtk_spin_button_new(repeat_adjustment, 1, 0);
+  gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(repeat_spin), TRUE);
+  gtk_widget_add_css_class(repeat_spin, "task-spin");
+  gtk_widget_set_size_request(repeat_spin, 72, -1);
+  state->task_repeat_spin = repeat_spin;
+
+  GtkWidget *repeat_hint = gtk_label_new("");
+  gtk_widget_add_css_class(repeat_hint, "task-meta");
+  gtk_widget_set_hexpand(repeat_hint, TRUE);
+  gtk_widget_set_halign(repeat_hint, GTK_ALIGN_END);
+  gtk_label_set_xalign(GTK_LABEL(repeat_hint), 1.0f);
+  gtk_label_set_ellipsize(GTK_LABEL(repeat_hint), PANGO_ELLIPSIZE_END);
+  gtk_widget_set_tooltip_text(
+      repeat_hint,
+      "Assumes each cycle is 25m focus + 5m break; every 4th break is 15m.");
+  state->task_repeat_hint = repeat_hint;
+
+  g_signal_connect(repeat_spin,
+                   "value-changed",
+                   G_CALLBACK(on_repeat_spin_changed),
+                   repeat_hint);
+  update_repeat_hint(GTK_SPIN_BUTTON(repeat_spin), repeat_hint);
+
+  gtk_box_append(GTK_BOX(repeat_group), repeat_label);
+  gtk_box_append(GTK_BOX(repeat_group), repeat_spin);
+
+  gtk_box_append(GTK_BOX(task_meta_row), repeat_group);
+  gtk_box_append(GTK_BOX(task_meta_row), repeat_hint);
+
+  gtk_box_append(GTK_BOX(task_input_box), task_input_row);
+  gtk_box_append(GTK_BOX(task_input_box), task_meta_row);
 
   GtkWidget *task_list = gtk_list_box_new();
   gtk_widget_add_css_class(task_list, "task-list");
@@ -1418,7 +1952,7 @@ on_activate(GtkApplication *app, gpointer user_data)
   state->task_empty_label = task_empty_label;
 
   gtk_box_append(GTK_BOX(tasks_card), tasks_title);
-  gtk_box_append(GTK_BOX(tasks_card), task_input_row);
+  gtk_box_append(GTK_BOX(tasks_card), task_input_box);
   gtk_box_append(GTK_BOX(tasks_card), task_scroller);
   gtk_box_append(GTK_BOX(tasks_card), task_empty_label);
 

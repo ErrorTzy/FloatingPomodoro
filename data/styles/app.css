@@ -100,6 +100,89 @@ label.tag-muted {
   color: #ffffff;
 }
 
+button.task-status {
+  background-color: @pomodoro_accent;
+  background-image: none;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+button.task-status:hover {
+  background-color: shade(@pomodoro_accent, 1.08);
+}
+
+button.task-status.tag-success {
+  background-color: @pomodoro_success;
+}
+
+button.task-status.tag-muted {
+  background-color: @pomodoro_text_muted;
+}
+
+button.task-status label {
+  color: #ffffff;
+}
+
+button.task-status:focus-visible {
+  box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
+}
+
+button.icon-button {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 999px;
+  padding: 4px;
+  color: @pomodoro_primary;
+  box-shadow: none;
+}
+
+button.icon-button:hover {
+  background-color: @pomodoro_surface_alt;
+}
+
+button.icon-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
+}
+
+button.icon-danger {
+  color: @pomodoro_error;
+}
+
+.cycle-stepper {
+  background-color: @pomodoro_surface_alt;
+  border-radius: 999px;
+  border: 1px solid @pomodoro_border;
+  padding: 2px 4px;
+}
+
+button.stepper-button {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: @pomodoro_primary;
+  box-shadow: none;
+}
+
+button.stepper-button:hover {
+  background-color: rgba(15, 76, 92, 0.08);
+}
+
+label.task-cycle-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: @pomodoro_primary;
+}
+
 button.btn-primary {
   background-color: @pomodoro_primary;
   background-image: none;
@@ -177,6 +260,10 @@ button.btn-danger label {
   color: @pomodoro_error;
 }
 
+button.task-add {
+  min-width: 76px;
+}
+
 menubutton.btn-secondary > button,
 menubutton.btn-primary > button,
 menubutton.btn-danger > button {
@@ -249,6 +336,28 @@ entry.task-entry {
   padding: 8px 12px;
 }
 
+entry.task-title-entry {
+  background-color: @pomodoro_surface;
+  border-radius: 10px;
+  border: 1px solid @pomodoro_border;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+spinbutton.task-spin,
+spinbutton.task-spin entry {
+  background-color: @pomodoro_surface;
+  border-radius: 12px;
+  border: 1px solid @pomodoro_border;
+  padding: 6px 10px;
+}
+
+spinbutton.task-spin button {
+  background-color: transparent;
+  border: none;
+}
+
 label.task-empty {
   font-size: 13px;
   color: @pomodoro_text_muted;
@@ -257,6 +366,10 @@ label.task-empty {
 
 .task-list {
   margin-top: 6px;
+}
+
+.task-input-meta {
+  padding-top: 2px;
 }
 
 .task-scroller {
