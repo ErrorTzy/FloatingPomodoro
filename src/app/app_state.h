@@ -28,6 +28,8 @@ typedef struct {
   GtkWidget *timer_start_button;
   GtkWidget *timer_skip_button;
   GtkWidget *timer_stop_button;
+  GtkWidget *overlay_toggle_button;
+  GtkWidget *overlay_toggle_icon;
   GtkWidget *timer_focus_stat_label;
   GtkWidget *timer_break_stat_label;
 } AppState;

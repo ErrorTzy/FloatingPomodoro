@@ -51,6 +51,41 @@ overlay_window_free(gpointer data)
   g_free(overlay);
 }
 
+gboolean
+overlay_window_is_visible(AppState *state)
+{
+  if (state == NULL || state->overlay_window == NULL) {
+    return FALSE;
+  }
+
+  return gtk_widget_get_visible(GTK_WIDGET(state->overlay_window));
+}
+
+static void
+overlay_window_update_toggle_icon(AppState *state)
+{
+  if (state == NULL || state->overlay_toggle_icon == NULL) {
+    return;
+  }
+
+  gboolean visible = overlay_window_is_visible(state);
+  const char *icon_name = visible ? "pomodoro-overlay-hide-symbolic"
+                                  : "pomodoro-overlay-show-symbolic";
+  gtk_image_set_from_icon_name(GTK_IMAGE(state->overlay_toggle_icon), icon_name);
+
+  if (state->overlay_toggle_button != NULL) {
+    gtk_widget_set_tooltip_text(state->overlay_toggle_button,
+                                visible ? "Hide floating ball"
+                                        : "Show floating ball");
+  }
+}
+
+void
+overlay_window_sync_toggle_icon(AppState *state)
+{
+  overlay_window_update_toggle_icon(state);
+}
+
 static char *
 format_timer_value(gint64 seconds)
 {
@@ -426,6 +461,7 @@ overlay_menu_popdown(OverlayWindow *overlay)
     return;
   }
 
+  overlay->menu_open = FALSE;
   gtk_popover_popdown(GTK_POPOVER(overlay->menu_popover));
 }
 
@@ -466,6 +502,19 @@ on_menu_stop_clicked(GtkButton *button, gpointer user_data)
 
   pomodoro_timer_stop(overlay->state->timer);
   overlay_menu_popdown(overlay);
+}
+
+static void
+on_menu_hide_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  OverlayWindow *overlay = user_data;
+  if (overlay == NULL || overlay->state == NULL) {
+    return;
+  }
+
+  overlay_menu_popdown(overlay);
+  overlay_window_set_visible(overlay->state, FALSE);
 }
 
 static void
@@ -730,6 +779,12 @@ overlay_window_create(GtkApplication *app, AppState *state)
                    overlay);
   overlay->menu_stop_button = stop_button;
 
+  GtkWidget *hide_button = create_menu_button("Hide", "btn-secondary");
+  g_signal_connect(hide_button,
+                   "clicked",
+                   G_CALLBACK(on_menu_hide_clicked),
+                   overlay);
+
   GtkWidget *show_button = create_menu_button("Open App", "btn-secondary");
   g_signal_connect(show_button,
                    "clicked",
@@ -745,6 +800,7 @@ overlay_window_create(GtkApplication *app, AppState *state)
   gtk_box_append(GTK_BOX(menu_box), toggle_button);
   gtk_box_append(GTK_BOX(menu_box), skip_button);
   gtk_box_append(GTK_BOX(menu_box), stop_button);
+  gtk_box_append(GTK_BOX(menu_box), hide_button);
   gtk_box_append(GTK_BOX(menu_box), show_button);
   gtk_box_append(GTK_BOX(menu_box), quit_button);
 
@@ -890,4 +946,48 @@ overlay_window_update(AppState *state)
   if (overlay->drawing_area != NULL) {
     gtk_widget_queue_draw(overlay->drawing_area);
   }
+}
+
+void
+overlay_window_set_visible(AppState *state, gboolean visible)
+{
+  if (state == NULL || state->overlay_window == NULL) {
+    return;
+  }
+
+  gboolean is_visible = overlay_window_is_visible(state);
+  if (visible == is_visible) {
+    overlay_window_update_toggle_icon(state);
+    return;
+  }
+
+  OverlayWindow *overlay = overlay_from_state(state);
+  if (visible) {
+    gtk_widget_set_visible(GTK_WIDGET(state->overlay_window), TRUE);
+    gtk_window_present(state->overlay_window);
+    if (overlay != NULL) {
+      g_idle_add(overlay_apply_x11_hints_idle, overlay);
+      overlay_sync_hover_state(overlay);
+    }
+  } else {
+    if (overlay != NULL) {
+      overlay_set_info_revealed(overlay, FALSE, FALSE);
+      if (overlay->menu_open) {
+        overlay_menu_popdown(overlay);
+      }
+    }
+    gtk_widget_set_visible(GTK_WIDGET(state->overlay_window), FALSE);
+  }
+
+  overlay_window_update_toggle_icon(state);
+}
+
+void
+overlay_window_toggle_visible(AppState *state)
+{
+  if (state == NULL) {
+    return;
+  }
+
+  overlay_window_set_visible(state, !overlay_window_is_visible(state));
 }

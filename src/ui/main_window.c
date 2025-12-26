@@ -225,6 +225,18 @@ on_timer_stop_clicked(GtkButton *button, gpointer user_data)
   main_window_update_timer_ui(state);
 }
 
+static void
+on_overlay_toggle_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  AppState *state = user_data;
+  if (state == NULL) {
+    return;
+  }
+
+  overlay_window_toggle_visible(state);
+}
+
 void
 main_window_present(GtkApplication *app)
 {
@@ -314,8 +326,26 @@ main_window_present(GtkApplication *app)
                    G_CALLBACK(dialogs_on_show_archived_clicked),
                    state);
 
+  GtkWidget *overlay_toggle_button = gtk_button_new();
+  gtk_widget_add_css_class(overlay_toggle_button, "icon-button");
+  gtk_widget_set_size_request(overlay_toggle_button, 36, 36);
+  gtk_widget_set_valign(overlay_toggle_button, GTK_ALIGN_CENTER);
+  g_signal_connect(overlay_toggle_button,
+                   "clicked",
+                   G_CALLBACK(on_overlay_toggle_clicked),
+                   state);
+  state->overlay_toggle_button = overlay_toggle_button;
+
+  GtkWidget *overlay_toggle_icon =
+      gtk_image_new_from_icon_name("pomodoro-overlay-hide-symbolic");
+  gtk_image_set_pixel_size(GTK_IMAGE(overlay_toggle_icon), 22);
+  gtk_button_set_child(GTK_BUTTON(overlay_toggle_button), overlay_toggle_icon);
+  state->overlay_toggle_icon = overlay_toggle_icon;
+  overlay_window_sync_toggle_icon(state);
+
   gtk_box_append(GTK_BOX(action_row), settings_button);
   gtk_box_append(GTK_BOX(action_row), archived_button);
+  gtk_box_append(GTK_BOX(action_row), overlay_toggle_button);
   gtk_box_append(GTK_BOX(root), action_row);
 
   GtkWidget *hero = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 18);
