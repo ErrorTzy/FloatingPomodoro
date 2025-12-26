@@ -5,6 +5,7 @@
 #include "focus/focus_guard_x11.h"
 #include "storage/settings_storage.h"
 #include "ui/task_list.h"
+#include "config.h"
 
 typedef struct {
   AppState *state;
@@ -39,6 +40,7 @@ typedef struct {
   GtkWidget *focus_guard_entry;
   GtkWidget *focus_guard_active_label;
   guint focus_guard_active_source;
+  char *focus_guard_last_external;
   gboolean suppress_signals;
 } TimerSettingsDialog;
 
@@ -110,6 +112,7 @@ timer_settings_dialog_free(gpointer data)
     dialog->focus_guard_active_source = 0;
   }
 
+  g_free(dialog->focus_guard_last_external);
   g_free(dialog);
 }
 
@@ -472,6 +475,57 @@ focus_guard_blacklist_contains(TimerSettingsDialog *dialog, const char *value)
   return FALSE;
 }
 
+static char *
+focus_guard_normalize_id(const char *value)
+{
+  if (value == NULL) {
+    return g_strdup("");
+  }
+
+  const char *cursor = value;
+  GString *normalized = g_string_new(NULL);
+  for (; *cursor != '\0'; cursor++) {
+    if (g_ascii_isalnum(*cursor)) {
+      g_string_append_c(normalized, (char)g_ascii_tolower(*cursor));
+    }
+  }
+  return g_string_free(normalized, FALSE);
+}
+
+static gboolean
+focus_guard_is_self_app(const char *app_name)
+{
+  if (app_name == NULL || *app_name == '\0') {
+    return FALSE;
+  }
+
+  const char *prg = g_get_prgname();
+  const char *candidates[] = {APP_ID, APP_NAME, prg, "xfce4-floating-pomodoro", NULL};
+
+  char *norm_app = focus_guard_normalize_id(app_name);
+  if (norm_app == NULL || *norm_app == '\0') {
+    g_free(norm_app);
+    return FALSE;
+  }
+
+  gboolean match = FALSE;
+  for (int i = 0; candidates[i] != NULL; i++) {
+    if (candidates[i] == NULL) {
+      continue;
+    }
+    char *norm_candidate = focus_guard_normalize_id(candidates[i]);
+    if (norm_candidate != NULL && g_strcmp0(norm_app, norm_candidate) == 0) {
+      match = TRUE;
+      g_free(norm_candidate);
+      break;
+    }
+    g_free(norm_candidate);
+  }
+
+  g_free(norm_app);
+  return match;
+}
+
 static void
 focus_guard_append_blacklist_row(TimerSettingsDialog *dialog, const char *value)
 {
@@ -601,12 +655,33 @@ focus_guard_update_active_label(gpointer user_data)
 
   char *app_name = NULL;
   if (focus_guard_x11_get_active_app(&app_name, NULL) && app_name != NULL) {
-    char *text = g_strdup_printf("Active app: %s", app_name);
+    gboolean is_self = focus_guard_is_self_app(app_name);
+    if (!is_self) {
+      g_free(dialog->focus_guard_last_external);
+      dialog->focus_guard_last_external = g_strdup(app_name);
+    }
+
+    if (!is_self) {
+      char *text = g_strdup_printf("Active app: %s", app_name);
+      gtk_label_set_text(GTK_LABEL(dialog->focus_guard_active_label), text);
+      g_free(text);
+    } else if (dialog->focus_guard_last_external != NULL) {
+      char *text =
+          g_strdup_printf("Last active app: %s", dialog->focus_guard_last_external);
+      gtk_label_set_text(GTK_LABEL(dialog->focus_guard_active_label), text);
+      g_free(text);
+    } else {
+      gtk_label_set_text(GTK_LABEL(dialog->focus_guard_active_label),
+                         "Last active app: none yet");
+    }
+  } else if (dialog->focus_guard_last_external != NULL) {
+    char *text =
+        g_strdup_printf("Last active app: %s", dialog->focus_guard_last_external);
     gtk_label_set_text(GTK_LABEL(dialog->focus_guard_active_label), text);
     g_free(text);
   } else {
     gtk_label_set_text(GTK_LABEL(dialog->focus_guard_active_label),
-                       "Active app: unavailable");
+                       "Last active app: unavailable");
   }
 
   g_free(app_name);
@@ -721,10 +796,19 @@ on_focus_guard_use_active_clicked(GtkButton *button, gpointer user_data)
     return;
   }
 
+  if (dialog->focus_guard_last_external != NULL) {
+    gtk_editable_set_text(GTK_EDITABLE(dialog->focus_guard_entry),
+                          dialog->focus_guard_last_external);
+    on_focus_guard_add_clicked(NULL, dialog);
+    return;
+  }
+
   char *app_name = NULL;
   if (focus_guard_x11_get_active_app(&app_name, NULL) && app_name != NULL) {
-    gtk_editable_set_text(GTK_EDITABLE(dialog->focus_guard_entry), app_name);
-    on_focus_guard_add_clicked(NULL, dialog);
+    if (!focus_guard_is_self_app(app_name)) {
+      gtk_editable_set_text(GTK_EDITABLE(dialog->focus_guard_entry), app_name);
+      on_focus_guard_add_clicked(NULL, dialog);
+    }
   }
 
   g_free(app_name);
