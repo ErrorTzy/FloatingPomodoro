@@ -419,7 +419,7 @@ update_current_task_summary(AppState *state)
     gtk_label_set_text(GTK_LABEL(state->current_task_label), "No active task");
     if (state->current_task_meta != NULL) {
       gtk_label_set_text(GTK_LABEL(state->current_task_meta),
-                         "Add a task below or reactivate a completed one");
+                         "Add a task below or activate a pending one");
     }
   }
 }
@@ -484,7 +484,9 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   }
 
   const char *status_text = "Active";
-  if (status == TASK_STATUS_COMPLETED) {
+  if (status == TASK_STATUS_PENDING) {
+    status_text = "Pending";
+  } else if (status == TASK_STATUS_COMPLETED) {
     status_text = "Complete";
   } else if (status == TASK_STATUS_ARCHIVED) {
     status_text = "Archived";
@@ -494,7 +496,9 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   gtk_widget_add_css_class(status_button, "task-status");
   gtk_widget_add_css_class(status_button, "tag");
   gtk_widget_set_valign(status_button, GTK_ALIGN_CENTER);
-  if (status == TASK_STATUS_COMPLETED) {
+  if (status == TASK_STATUS_PENDING) {
+    gtk_widget_add_css_class(status_button, "tag-pending");
+  } else if (status == TASK_STATUS_COMPLETED) {
     gtk_widget_add_css_class(status_button, "tag-success");
   } else if (status == TASK_STATUS_ARCHIVED) {
     gtk_widget_add_css_class(status_button, "tag-muted");
@@ -641,6 +645,15 @@ task_list_refresh(AppState *state)
     for (guint i = 0; i < tasks->len; i++) {
       PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
       if (task != NULL &&
+          pomodoro_task_get_status(task) == TASK_STATUS_PENDING) {
+        append_task_row(state, state->task_list, task);
+        visible_count++;
+      }
+    }
+
+    for (guint i = 0; i < tasks->len; i++) {
+      PomodoroTask *task = g_ptr_array_index((GPtrArray *)tasks, i);
+      if (task != NULL &&
           pomodoro_task_get_status(task) == TASK_STATUS_COMPLETED) {
         append_task_row(state, state->task_list, task);
         visible_count++;
@@ -738,33 +751,27 @@ on_task_status_clicked(GtkButton *button, gpointer user_data)
 
   TaskStatus status = pomodoro_task_get_status(task);
 
-  if (status == TASK_STATUS_ACTIVE) {
-    dialogs_show_confirm(state,
-                         "Complete task?",
-                         "Are you sure you want to complete this task?",
-                         task,
-                         NULL,
-                         FALSE);
+  if (status == TASK_STATUS_ACTIVE || status == TASK_STATUS_COMPLETED) {
+    task_store_set_pending(state->store, task);
+    task_store_apply_archive_policy(state->store);
+    task_list_save_store(state);
+    task_list_refresh(state);
     return;
   }
 
-  if (status == TASK_STATUS_COMPLETED) {
+  if (status == TASK_STATUS_PENDING) {
     PomodoroTask *active_task = task_store_get_active(state->store);
-    if (active_task == NULL) {
-      task_store_reactivate(state->store, task);
-      task_store_apply_archive_policy(state->store);
-      task_list_save_store(state);
-      task_list_refresh(state);
-      return;
-    }
+    const char *body_text =
+        active_task != NULL
+            ? "Make this task active? The current active task will be moved to pending."
+            : "Make this task active?";
 
     dialogs_show_confirm(
         state,
-        "Switch active task?",
-        "Are you sure you want to complete the current task and set this task to active state?",
+        "Activate task?",
+        body_text,
         task,
-        active_task,
-        TRUE);
+        DIALOG_CONFIRM_ACTIVATE_TASK);
   }
 }
 

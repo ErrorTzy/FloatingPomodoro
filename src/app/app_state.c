@@ -23,6 +23,11 @@ app_state_free(gpointer data)
   dialogs_cleanup_settings(state);
   dialogs_cleanup_archived(state);
 
+  if (state->overlay_window != NULL) {
+    gtk_window_destroy(state->overlay_window);
+    state->overlay_window = NULL;
+  }
+
   pomodoro_timer_free(state->timer);
   task_store_free(state->store);
   g_free(state);

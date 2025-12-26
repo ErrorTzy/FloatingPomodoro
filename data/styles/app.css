@@ -95,6 +95,11 @@ label.tag-success {
   color: #ffffff;
 }
 
+label.tag-pending {
+  background-color: @pomodoro_primary;
+  color: #ffffff;
+}
+
 label.tag-muted {
   background-color: @pomodoro_text_muted;
   color: #ffffff;
@@ -118,6 +123,10 @@ button.task-status:hover {
 
 button.task-status.tag-success {
   background-color: @pomodoro_success;
+}
+
+button.task-status.tag-pending {
+  background-color: @pomodoro_primary;
 }
 
 button.task-status.tag-muted {
@@ -432,4 +441,109 @@ dropdown.archive-dropdown {
   border-radius: 12px;
   border: 1px solid @pomodoro_border;
   padding: 6px;
+}
+
+window.overlay-window {
+  background-color: transparent;
+}
+
+.overlay-root {
+  background-color: transparent;
+}
+
+.overlay-root.overlay-focus label.overlay-time {
+  color: @pomodoro_primary;
+}
+
+.overlay-root.overlay-break label.overlay-time {
+  color: @pomodoro_accent;
+}
+
+.overlay-root.overlay-paused label.overlay-time {
+  color: @pomodoro_text_muted;
+}
+
+.overlay-bubble {
+  background-color: transparent;
+}
+
+label.overlay-time {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+label.overlay-phase {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: @pomodoro_text_muted;
+}
+
+.overlay-panel {
+  background-color: rgba(255, 249, 241, 0.92);
+  border-radius: 14px;
+  border: 1px solid @pomodoro_border;
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px -18px @pomodoro_shadow;
+}
+
+label.overlay-panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: @pomodoro_text_muted;
+}
+
+label.overlay-panel-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: @pomodoro_text;
+}
+
+label.overlay-panel-meta {
+  font-size: 12px;
+  color: @pomodoro_text_muted;
+}
+
+scale.overlay-opacity {
+  margin-left: 4px;
+}
+
+scale.overlay-opacity trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: @pomodoro_surface_alt;
+}
+
+scale.overlay-opacity highlight {
+  border-radius: 999px;
+  background-color: @pomodoro_primary;
+}
+
+scale.overlay-opacity slider {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 999px;
+  background-color: @pomodoro_primary;
+}
+
+.overlay-menu-popover {
+  background-color: transparent;
+}
+
+.overlay-menu {
+  background-color: @pomodoro_surface;
+  border-radius: 12px;
+  border: 1px solid @pomodoro_border;
+  padding: 8px;
+  box-shadow: 0 12px 30px -18px @pomodoro_shadow;
+}
+
+button.overlay-menu-button {
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
 }

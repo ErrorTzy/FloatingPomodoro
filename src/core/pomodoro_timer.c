@@ -326,6 +326,22 @@ pomodoro_timer_get_remaining_seconds(const PomodoroTimer *timer)
 }
 
 gint64
+pomodoro_timer_get_phase_total_seconds(const PomodoroTimer *timer,
+                                       PomodoroPhase phase)
+{
+  if (timer == NULL) {
+    return 0;
+  }
+
+  gint64 duration_ms = pomodoro_timer_phase_duration_ms(timer, phase);
+  if (duration_ms <= 0) {
+    return 0;
+  }
+
+  return (duration_ms + 999) / 1000;
+}
+
+gint64
 pomodoro_timer_get_focus_seconds(const PomodoroTimer *timer)
 {
   return timer ? timer->focus_ms_total / 1000 : 0;

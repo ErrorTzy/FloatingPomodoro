@@ -13,6 +13,7 @@ typedef struct {
   GtkWindow *window;
   GtkWindow *settings_window;
   GtkWindow *archived_window;
+  GtkWindow *overlay_window;
   TaskRowControls *editing_controls;
   GtkWidget *task_list;
   GtkWidget *task_empty_label;

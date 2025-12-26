@@ -5,8 +5,9 @@
 
 typedef enum {
   TASK_STATUS_ACTIVE = 0,
-  TASK_STATUS_COMPLETED = 1,
-  TASK_STATUS_ARCHIVED = 2
+  TASK_STATUS_PENDING = 1,
+  TASK_STATUS_COMPLETED = 2,
+  TASK_STATUS_ARCHIVED = 3
 } TaskStatus;
 
 typedef enum {
@@ -43,6 +44,8 @@ PomodoroTask *task_store_get_active(TaskStore *store);
 
 void task_store_complete(TaskStore *store, PomodoroTask *task);
 void task_store_reactivate(TaskStore *store, PomodoroTask *task);
+void task_store_set_active(TaskStore *store, PomodoroTask *task);
+void task_store_set_pending(TaskStore *store, PomodoroTask *task);
 void task_store_archive_task(TaskStore *store, PomodoroTask *task);
 gboolean task_store_remove(TaskStore *store, PomodoroTask *task);
 

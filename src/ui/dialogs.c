@@ -7,9 +7,8 @@
 typedef struct {
   AppState *state;
   PomodoroTask *task;
-  PomodoroTask *active_task;
   GtkWidget *window;
-  gboolean switch_active;
+  DialogConfirmAction action;
 } ConfirmDialog;
 
 typedef struct {
@@ -77,11 +76,8 @@ apply_confirm_dialog(ConfirmDialog *dialog)
     return;
   }
 
-  if (dialog->switch_active) {
-    if (dialog->active_task != NULL && dialog->active_task != dialog->task) {
-      task_store_complete(dialog->state->store, dialog->active_task);
-    }
-    task_store_reactivate(dialog->state->store, dialog->task);
+  if (dialog->action == DIALOG_CONFIRM_ACTIVATE_TASK) {
+    task_store_set_active(dialog->state->store, dialog->task);
   } else {
     task_store_complete(dialog->state->store, dialog->task);
   }
@@ -112,8 +108,7 @@ dialogs_show_confirm(AppState *state,
                      const char *title_text,
                      const char *body_text,
                      PomodoroTask *task,
-                     PomodoroTask *active_task,
-                     gboolean switch_active)
+                     DialogConfirmAction action)
 {
   if (state == NULL || task == NULL) {
     return;
@@ -164,9 +159,8 @@ dialogs_show_confirm(AppState *state,
   ConfirmDialog *dialog_state = g_new0(ConfirmDialog, 1);
   dialog_state->state = state;
   dialog_state->task = task;
-  dialog_state->active_task = active_task;
   dialog_state->window = dialog;
-  dialog_state->switch_active = switch_active;
+  dialog_state->action = action;
 
   g_object_set_data_full(G_OBJECT(dialog),
                          "confirm-dialog",

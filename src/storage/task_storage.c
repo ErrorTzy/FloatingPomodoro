@@ -9,6 +9,8 @@ task_status_to_string(TaskStatus status)
   switch (status) {
     case TASK_STATUS_ACTIVE:
       return "active";
+    case TASK_STATUS_PENDING:
+      return "pending";
     case TASK_STATUS_COMPLETED:
       return "completed";
     case TASK_STATUS_ARCHIVED:
@@ -23,6 +25,10 @@ task_status_from_string(const char *value)
 {
   if (value == NULL) {
     return TASK_STATUS_ACTIVE;
+  }
+
+  if (g_ascii_strcasecmp(value, "pending") == 0) {
+    return TASK_STATUS_PENDING;
   }
 
   if (g_ascii_strcasecmp(value, "completed") == 0) {

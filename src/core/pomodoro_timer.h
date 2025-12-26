@@ -47,6 +47,8 @@ PomodoroPhase pomodoro_timer_get_phase(const PomodoroTimer *timer);
 PomodoroPhase pomodoro_timer_get_next_phase(const PomodoroTimer *timer);
 PomodoroTimerState pomodoro_timer_get_state(const PomodoroTimer *timer);
 gint64 pomodoro_timer_get_remaining_seconds(const PomodoroTimer *timer);
+gint64 pomodoro_timer_get_phase_total_seconds(const PomodoroTimer *timer,
+                                              PomodoroPhase phase);
 
 gint64 pomodoro_timer_get_focus_seconds(const PomodoroTimer *timer);
 gint64 pomodoro_timer_get_break_seconds(const PomodoroTimer *timer);

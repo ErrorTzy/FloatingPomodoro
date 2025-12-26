@@ -3,6 +3,7 @@
 #include "app/app_state.h"
 #include "core/pomodoro_timer.h"
 #include "core/task_store.h"
+#include "overlay/overlay_window.h"
 #include "storage/settings_storage.h"
 #include "storage/task_storage.h"
 #include "ui/dialogs.h"
@@ -143,6 +144,7 @@ main_window_update_timer_ui(AppState *state)
   }
 
   update_timer_stats(state, timer);
+  overlay_window_update(state);
 }
 
 static void
@@ -261,6 +263,8 @@ main_window_present(GtkApplication *app)
                                      on_timer_tick,
                                      on_timer_phase_changed,
                                      state);
+
+  overlay_window_create(app, state);
 
   GtkGesture *window_click = gtk_gesture_click_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(window_click), 0);
@@ -393,7 +397,7 @@ main_window_present(GtkApplication *app)
   gtk_box_append(GTK_BOX(task_row), task_label);
   gtk_box_append(GTK_BOX(task_row), task_tag);
 
-  GtkWidget *task_meta = gtk_label_new("Add a task below or reactivate a completed one");
+  GtkWidget *task_meta = gtk_label_new("Add a task below or activate a pending one");
   gtk_widget_add_css_class(task_meta, "task-meta");
   gtk_widget_set_halign(task_meta, GTK_ALIGN_START);
   state->current_task_meta = task_meta;
