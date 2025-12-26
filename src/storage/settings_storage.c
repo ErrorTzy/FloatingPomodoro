@@ -2,6 +2,46 @@
 
 #include <errno.h>
 
+static AppSettings
+settings_storage_app_default(void)
+{
+  AppSettings settings = {0};
+  settings.close_to_tray = TRUE;
+  return settings;
+}
+
+static GKeyFile *
+settings_storage_load_key_file(const char *path, GError **error)
+{
+  GKeyFile *key_file = g_key_file_new();
+
+  if (g_file_test(path, G_FILE_TEST_EXISTS)) {
+    if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, error)) {
+      g_key_file_free(key_file);
+      return NULL;
+    }
+  }
+
+  return key_file;
+}
+
+static gboolean
+settings_storage_ensure_dir(const char *path, GError **error)
+{
+  char *dir = g_path_get_dirname(path);
+  if (g_mkdir_with_parents(dir, 0755) != 0) {
+    g_set_error(error,
+                G_FILE_ERROR,
+                g_file_error_from_errno(errno),
+                "Failed to create data directory '%s'",
+                dir);
+    g_free(dir);
+    return FALSE;
+  }
+  g_free(dir);
+  return TRUE;
+}
+
 char *
 settings_storage_get_path(void)
 {
@@ -30,9 +70,8 @@ settings_storage_load_timer(PomodoroTimerConfig *config, GError **error)
     return TRUE;
   }
 
-  GKeyFile *key_file = g_key_file_new();
-  if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, error)) {
-    g_key_file_free(key_file);
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
     g_free(path);
     return FALSE;
   }
@@ -95,20 +134,16 @@ settings_storage_save_timer(const PomodoroTimerConfig *config, GError **error)
   PomodoroTimerConfig normalized = pomodoro_timer_config_normalize(*config);
 
   char *path = settings_storage_get_path();
-  char *dir = g_path_get_dirname(path);
-  if (g_mkdir_with_parents(dir, 0755) != 0) {
-    g_set_error(error,
-                G_FILE_ERROR,
-                g_file_error_from_errno(errno),
-                "Failed to create data directory '%s'",
-                dir);
-    g_free(dir);
+  if (!settings_storage_ensure_dir(path, error)) {
     g_free(path);
     return FALSE;
   }
-  g_free(dir);
 
-  GKeyFile *key_file = g_key_file_new();
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
+    g_free(path);
+    return FALSE;
+  }
 
   g_key_file_set_integer(key_file,
                          "timer",
@@ -126,6 +161,85 @@ settings_storage_save_timer(const PomodoroTimerConfig *config, GError **error)
                          "timer",
                          "long_break_interval",
                          (gint)normalized.long_break_interval);
+
+  gsize length = 0;
+  gchar *data = g_key_file_to_data(key_file, &length, error);
+  if (data == NULL) {
+    g_key_file_free(key_file);
+    g_free(path);
+    return FALSE;
+  }
+
+  gboolean result = g_file_set_contents(path, data, length, error);
+
+  g_free(data);
+  g_key_file_free(key_file);
+  g_free(path);
+  return result;
+}
+
+gboolean
+settings_storage_load_app(AppSettings *settings, GError **error)
+{
+  if (settings == NULL) {
+    g_set_error(error,
+                G_FILE_ERROR,
+                G_FILE_ERROR_INVAL,
+                "App settings is NULL");
+    return FALSE;
+  }
+
+  *settings = settings_storage_app_default();
+
+  char *path = settings_storage_get_path();
+  if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
+    g_free(path);
+    return TRUE;
+  }
+
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
+    g_free(path);
+    return FALSE;
+  }
+
+  if (g_key_file_has_key(key_file, "app", "close_to_tray", NULL)) {
+    settings->close_to_tray =
+        g_key_file_get_boolean(key_file, "app", "close_to_tray", NULL);
+  }
+
+  g_key_file_free(key_file);
+  g_free(path);
+  return TRUE;
+}
+
+gboolean
+settings_storage_save_app(const AppSettings *settings, GError **error)
+{
+  if (settings == NULL) {
+    g_set_error(error,
+                G_FILE_ERROR,
+                G_FILE_ERROR_INVAL,
+                "App settings is NULL");
+    return FALSE;
+  }
+
+  char *path = settings_storage_get_path();
+  if (!settings_storage_ensure_dir(path, error)) {
+    g_free(path);
+    return FALSE;
+  }
+
+  GKeyFile *key_file = settings_storage_load_key_file(path, error);
+  if (key_file == NULL) {
+    g_free(path);
+    return FALSE;
+  }
+
+  g_key_file_set_boolean(key_file,
+                         "app",
+                         "close_to_tray",
+                         settings->close_to_tray);
 
   gsize length = 0;
   gchar *data = g_key_file_to_data(key_file, &length, error);

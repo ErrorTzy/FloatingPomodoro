@@ -6,6 +6,7 @@
 
 typedef struct _TaskRowControls TaskRowControls;
 typedef struct _PomodoroTimer PomodoroTimer;
+typedef struct _TrayItem TrayItem;
 
 typedef struct {
   TaskStore *store;
@@ -34,6 +35,9 @@ typedef struct {
   GtkWidget *overlay_toggle_icon;
   GtkWidget *timer_focus_stat_label;
   GtkWidget *timer_break_stat_label;
+  TrayItem *tray_item;
+  gboolean close_to_tray;
+  gboolean quit_requested;
 } AppState;
 
 AppState *app_state_create(GtkWindow *window, TaskStore *store);

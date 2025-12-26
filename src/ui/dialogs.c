@@ -29,6 +29,7 @@ typedef struct {
   GtkSpinButton *short_spin;
   GtkSpinButton *long_spin;
   GtkSpinButton *interval_spin;
+  GtkCheckButton *close_to_tray_check;
   gboolean suppress_signals;
 } TimerSettingsDialog;
 
@@ -391,6 +392,29 @@ on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data)
 }
 
 static void
+on_close_to_tray_toggled(GtkCheckButton *button, gpointer user_data)
+{
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL) {
+    return;
+  }
+
+  AppSettings settings = {.close_to_tray = TRUE};
+  if (button != NULL) {
+    settings.close_to_tray = gtk_check_button_get_active(button);
+  }
+
+  dialog->state->close_to_tray = settings.close_to_tray;
+
+  GError *error = NULL;
+  if (!settings_storage_save_app(&settings, &error)) {
+    g_warning("Failed to save app settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+}
+
+static void
 timer_settings_update_controls(TimerSettingsDialog *dialog)
 {
   if (dialog == NULL || dialog->state == NULL || dialog->state->timer == NULL) {
@@ -414,6 +438,11 @@ timer_settings_update_controls(TimerSettingsDialog *dialog)
   if (dialog->interval_spin != NULL) {
     gtk_spin_button_set_value(dialog->interval_spin,
                               (gdouble)config.long_break_interval);
+  }
+
+  if (dialog->close_to_tray_check != NULL) {
+    gtk_check_button_set_active(dialog->close_to_tray_check,
+                                dialog->state->close_to_tray);
   }
 }
 
@@ -679,6 +708,17 @@ show_timer_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(interval_row), interval_label);
   gtk_box_append(GTK_BOX(interval_row), interval_spin);
 
+  GtkWidget *tray_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *tray_label = gtk_label_new("Close to tray");
+  gtk_widget_add_css_class(tray_label, "setting-label");
+  gtk_widget_set_halign(tray_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(tray_label, TRUE);
+  GtkWidget *tray_check = gtk_check_button_new();
+  gtk_widget_set_halign(tray_check, GTK_ALIGN_END);
+
+  gtk_box_append(GTK_BOX(tray_row), tray_label);
+  gtk_box_append(GTK_BOX(tray_row), tray_check);
+
   GtkWidget *hint =
       gtk_label_new("Changes apply immediately and can be adjusted anytime.");
   gtk_widget_add_css_class(hint, "task-meta");
@@ -691,6 +731,7 @@ show_timer_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(root), short_row);
   gtk_box_append(GTK_BOX(root), long_row);
   gtk_box_append(GTK_BOX(root), interval_row);
+  gtk_box_append(GTK_BOX(root), tray_row);
   gtk_box_append(GTK_BOX(root), hint);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
@@ -703,6 +744,7 @@ show_timer_settings_window(AppState *state)
   dialog->short_spin = GTK_SPIN_BUTTON(short_spin);
   dialog->long_spin = GTK_SPIN_BUTTON(long_spin);
   dialog->interval_spin = GTK_SPIN_BUTTON(interval_spin);
+  dialog->close_to_tray_check = GTK_CHECK_BUTTON(tray_check);
 
   g_signal_connect(focus_spin,
                    "value-changed",
@@ -719,6 +761,10 @@ show_timer_settings_window(AppState *state)
   g_signal_connect(interval_spin,
                    "value-changed",
                    G_CALLBACK(on_timer_settings_changed),
+                   dialog);
+  g_signal_connect(tray_check,
+                   "toggled",
+                   G_CALLBACK(on_close_to_tray_toggled),
                    dialog);
 
   g_object_set_data_full(G_OBJECT(window),

@@ -7,6 +7,7 @@ app_sources = files(
   'overlay/overlay_window.c',
   'storage/settings_storage.c',
   'storage/task_storage.c',
+  'tray/tray_item.c',
   'ui/dialogs.c',
   'ui/main_window.c',
   'ui/task_list.c',

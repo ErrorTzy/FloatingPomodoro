@@ -4,6 +4,7 @@
 
 #include "core/pomodoro_timer.h"
 #include "core/task_store.h"
+#include "tray/tray_item.h"
 #include "utils/x11.h"
 
 #define OVERLAY_INFO_REVEAL_DURATION_MS 220
@@ -88,6 +89,7 @@ void
 overlay_window_sync_toggle_icon(AppState *state)
 {
   overlay_window_update_toggle_icon(state);
+  tray_item_update(state);
 }
 
 static char *

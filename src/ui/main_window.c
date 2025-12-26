@@ -6,6 +6,7 @@
 #include "overlay/overlay_window.h"
 #include "storage/settings_storage.h"
 #include "storage/task_storage.h"
+#include "tray/tray_item.h"
 #include "ui/dialogs.h"
 #include "ui/task_list.h"
 #include "config.h"
@@ -172,6 +173,7 @@ main_window_update_timer_ui(AppState *state)
 
   update_timer_stats(state, timer);
   overlay_window_update(state);
+  tray_item_update(state);
 }
 
 static void
@@ -264,13 +266,68 @@ on_overlay_toggle_clicked(GtkButton *button, gpointer user_data)
   overlay_window_toggle_visible(state);
 }
 
+static gboolean
+on_main_window_close_request(GtkWindow *window, gpointer user_data)
+{
+  AppState *state = user_data;
+  if (state == NULL) {
+    return FALSE;
+  }
+
+  if (state->quit_requested) {
+    return FALSE;
+  }
+
+  if (state->close_to_tray) {
+    gtk_widget_set_visible(GTK_WIDGET(window), FALSE);
+    return TRUE;
+  }
+
+  GtkApplication *app = gtk_window_get_application(window);
+  if (app != NULL) {
+    state->quit_requested = TRUE;
+    g_application_quit(G_APPLICATION(app));
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+static void
+on_main_window_destroy(GtkWidget *widget, gpointer user_data)
+{
+  GtkApplication *app = user_data;
+  if (app == NULL) {
+    return;
+  }
+
+  if (g_object_get_data(G_OBJECT(app), "main-window") == widget) {
+    g_object_set_data(G_OBJECT(app), "main-window", NULL);
+  }
+}
+
 void
 main_window_present(GtkApplication *app)
 {
+  if (app != NULL) {
+    GtkWindow *existing = g_object_get_data(G_OBJECT(app), "main-window");
+    if (existing != NULL) {
+      gtk_window_present(existing);
+      return;
+    }
+  }
+
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), APP_NAME);
   gtk_window_set_default_size(GTK_WINDOW(window), 880, 560);
   gtk_widget_add_css_class(window, "app-window");
+  if (app != NULL) {
+    g_object_set_data(G_OBJECT(app), "main-window", window);
+    g_signal_connect(window,
+                     "destroy",
+                     G_CALLBACK(on_main_window_destroy),
+                     app);
+  }
 
   TaskStore *store = task_store_new();
   GError *error = NULL;
@@ -298,12 +355,24 @@ main_window_present(GtkApplication *app)
   AppState *state = app_state_create(GTK_WINDOW(window), store);
   g_object_set_data_full(G_OBJECT(window), "app-state", state, app_state_free);
   state->timer = timer;
+  AppSettings app_settings = {0};
+  if (!settings_storage_load_app(&app_settings, &error)) {
+    g_warning("Failed to load app settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+  state->close_to_tray = app_settings.close_to_tray;
   pomodoro_timer_set_update_callback(timer,
                                      on_timer_tick,
                                      on_timer_phase_changed,
                                      state);
 
   overlay_window_create(app, state);
+  tray_item_create(app, state);
+  g_signal_connect(window,
+                   "close-request",
+                   G_CALLBACK(on_main_window_close_request),
+                   state);
 
   GtkGesture *window_click = gtk_gesture_click_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(window_click), 0);
