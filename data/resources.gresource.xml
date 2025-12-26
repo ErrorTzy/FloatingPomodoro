@@ -12,5 +12,6 @@
     <file>icons/scalable/actions/pomodoro-overlay-hide-symbolic.svg</file>
     <file>icons/scalable/actions/pomodoro-overlay-show-symbolic.svg</file>
     <file>icons/scalable/actions/pomodoro-restore-symbolic.svg</file>
+    <file>icons/scalable/actions/pomodoro-timer-settings-symbolic.svg</file>
   </gresource>
 </gresources>

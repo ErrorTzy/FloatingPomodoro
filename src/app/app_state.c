@@ -20,7 +20,8 @@ app_state_free(gpointer data)
     return;
   }
 
-  dialogs_cleanup_settings(state);
+  dialogs_cleanup_archive_settings(state);
+  dialogs_cleanup_timer_settings(state);
   dialogs_cleanup_archived(state);
 
   if (state->overlay_window != NULL) {

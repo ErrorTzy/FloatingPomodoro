@@ -16,6 +16,22 @@
   color: @pomodoro_text;
 }
 
+tooltip {
+  background-color: rgba(18, 18, 18, 0.95);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: #f2f2f2;
+  border: none;
+}
+
+tooltip * {
+  color: #f2f2f2;
+}
+
+tooltip label {
+  color: #f2f2f2;
+}
+
 window.app-window {
   background-color: @pomodoro_bg;
 }
@@ -163,6 +179,16 @@ button.icon-button:focus-visible {
   box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
 }
 
+button.icon-button:disabled {
+  color: @pomodoro_text_muted;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+button.icon-button:disabled image {
+  color: @pomodoro_text_muted;
+}
+
 button.icon-danger {
   color: @pomodoro_error;
 }
@@ -293,7 +319,8 @@ button.btn-danger:disabled label {
 }
 
 button.task-add {
-  min-width: 76px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 menubutton.btn-secondary > button,
@@ -532,18 +559,63 @@ scale.overlay-opacity slider {
 
 .overlay-menu-popover {
   background-color: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
 }
 
 .overlay-menu {
   background-color: @pomodoro_surface;
-  border-radius: 12px;
-  border: 1px solid @pomodoro_border;
-  padding: 8px;
-  box-shadow: 0 12px 30px -18px @pomodoro_shadow;
+  border-radius: 10px;
+  border: none;
+  padding: 4px 6px;
+  box-shadow: 0 8px 18px -16px @pomodoro_shadow;
 }
 
-button.overlay-menu-button {
-  border-radius: 10px;
-  padding: 8px 12px;
+.overlay-menu-actions {
+  padding: 0;
+}
+
+button.overlay-menu-icon {
+  border-radius: 8px;
+  padding: 2px;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+separator.overlay-menu-divider {
+  min-height: 1px;
+  margin: 2px 0;
+  background-color: @pomodoro_border;
+  opacity: 0.7;
+}
+
+button.overlay-menu-text {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 6px;
   font-weight: 600;
+  color: @pomodoro_text;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+button.overlay-menu-text:hover {
+  background-color: @pomodoro_surface_alt;
+  color: @pomodoro_primary;
+}
+
+button.overlay-menu-text:focus-visible {
+  box-shadow: 0 0 0 3px rgba(15, 76, 92, 0.25);
+}
+
+button.overlay-menu-text.overlay-menu-danger {
+  color: @pomodoro_error;
+}
+
+button.overlay-menu-text.overlay-menu-danger:hover {
+  background-color: rgba(215, 38, 61, 0.12);
+  color: @pomodoro_error;
 }

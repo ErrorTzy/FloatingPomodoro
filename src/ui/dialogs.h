@@ -5,7 +5,10 @@
 #include "app/app_state.h"
 #include "core/task_store.h"
 
-void dialogs_on_show_settings_clicked(GtkButton *button, gpointer user_data);
+void dialogs_on_show_archive_settings_clicked(GtkButton *button,
+                                              gpointer user_data);
+void dialogs_on_show_timer_settings_clicked(GtkButton *button,
+                                            gpointer user_data);
 void dialogs_on_show_archived_clicked(GtkButton *button, gpointer user_data);
 typedef enum {
   DIALOG_CONFIRM_COMPLETE_TASK = 0,
@@ -17,7 +20,8 @@ void dialogs_show_confirm(AppState *state,
                           const char *body_text,
                           PomodoroTask *task,
                           DialogConfirmAction action);
-void dialogs_cleanup_settings(AppState *state);
+void dialogs_cleanup_archive_settings(AppState *state);
+void dialogs_cleanup_timer_settings(AppState *state);
 void dialogs_cleanup_archived(AppState *state);
 
 gboolean dialogs_get_archived_targets(AppState *state,

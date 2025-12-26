@@ -21,6 +21,7 @@ typedef struct {
   GtkWidget *opacity_scale;
   GtkWidget *menu_popover;
   GtkWidget *menu_toggle_button;
+  GtkWidget *menu_toggle_icon;
   GtkWidget *menu_skip_button;
   GtkWidget *menu_stop_button;
   gboolean menu_open;
@@ -74,9 +75,12 @@ overlay_window_update_toggle_icon(AppState *state)
   gtk_image_set_from_icon_name(GTK_IMAGE(state->overlay_toggle_icon), icon_name);
 
   if (state->overlay_toggle_button != NULL) {
-    gtk_widget_set_tooltip_text(state->overlay_toggle_button,
-                                visible ? "Hide floating ball"
-                                        : "Show floating ball");
+    const char *label = visible ? "Hide floating ball" : "Show floating ball";
+    gtk_widget_set_tooltip_text(state->overlay_toggle_button, label);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(state->overlay_toggle_button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   label,
+                                   -1);
   }
 }
 
@@ -546,14 +550,50 @@ on_menu_quit_clicked(GtkButton *button, gpointer user_data)
 }
 
 static GtkWidget *
-create_menu_button(const char *label, const char *css_class)
+create_menu_icon_button(const char *icon_name,
+                        const char *label,
+                        GtkWidget **icon_out)
+{
+  GtkWidget *button = gtk_button_new();
+  gtk_widget_add_css_class(button, "icon-button");
+  gtk_widget_add_css_class(button, "overlay-menu-icon");
+  gtk_widget_set_size_request(button, 30, 30);
+
+  GtkWidget *icon = gtk_image_new_from_icon_name(icon_name);
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), 16);
+  gtk_button_set_child(GTK_BUTTON(button), icon);
+
+  if (icon_out != NULL) {
+    *icon_out = icon;
+  }
+
+  if (label != NULL) {
+    gtk_widget_set_tooltip_text(button, label);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   label,
+                                   -1);
+  }
+
+  return button;
+}
+
+static GtkWidget *
+create_menu_text_button(const char *label, const char *css_class)
 {
   GtkWidget *button = gtk_button_new_with_label(label);
-  gtk_widget_add_css_class(button, "overlay-menu-button");
+  gtk_widget_add_css_class(button, "overlay-menu-text");
   if (css_class != NULL) {
     gtk_widget_add_css_class(button, css_class);
   }
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  gtk_widget_set_hexpand(button, TRUE);
+  if (label != NULL) {
+    gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   label,
+                                   -1);
+  }
   return button;
 }
 
@@ -755,54 +795,85 @@ overlay_window_create(GtkApplication *app, AppState *state)
 
   gtk_revealer_set_child(GTK_REVEALER(revealer), panel);
 
-  GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_widget_add_css_class(menu_box, "overlay-menu");
 
-  GtkWidget *toggle_button = create_menu_button("Start Focus", "btn-primary");
+  GtkWidget *action_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_widget_add_css_class(action_row, "overlay-menu-actions");
+  gtk_widget_set_halign(action_row, GTK_ALIGN_CENTER);
+
+  GtkWidget *toggle_button = create_menu_icon_button(
+      "media-playback-start-symbolic",
+      "Start Focus",
+      &overlay->menu_toggle_icon);
   g_signal_connect(toggle_button,
                    "clicked",
                    G_CALLBACK(on_menu_toggle_clicked),
                    overlay);
   overlay->menu_toggle_button = toggle_button;
 
-  GtkWidget *skip_button = create_menu_button("Skip", "btn-secondary");
+  GtkWidget *skip_button =
+      create_menu_icon_button("media-skip-forward-symbolic", "Skip", NULL);
   g_signal_connect(skip_button,
                    "clicked",
                    G_CALLBACK(on_menu_skip_clicked),
                    overlay);
   overlay->menu_skip_button = skip_button;
 
-  GtkWidget *stop_button = create_menu_button("Stop", "btn-danger");
+  GtkWidget *stop_button =
+      create_menu_icon_button("media-playback-stop-symbolic", "Stop", NULL);
+  gtk_widget_add_css_class(stop_button, "icon-danger");
   g_signal_connect(stop_button,
                    "clicked",
                    G_CALLBACK(on_menu_stop_clicked),
                    overlay);
   overlay->menu_stop_button = stop_button;
 
-  GtkWidget *hide_button = create_menu_button("Hide", "btn-secondary");
+  GtkWidget *actions_divider = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_widget_add_css_class(actions_divider, "overlay-menu-divider");
+
+  GtkWidget *text_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_add_css_class(text_box, "overlay-menu-links");
+  gtk_widget_set_halign(text_box, GTK_ALIGN_FILL);
+  gtk_widget_set_hexpand(text_box, TRUE);
+
+  GtkWidget *hide_button = create_menu_text_button("Hide", NULL);
   g_signal_connect(hide_button,
                    "clicked",
                    G_CALLBACK(on_menu_hide_clicked),
                    overlay);
 
-  GtkWidget *show_button = create_menu_button("Open App", "btn-secondary");
+  GtkWidget *text_divider_one = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_widget_add_css_class(text_divider_one, "overlay-menu-divider");
+
+  GtkWidget *show_button = create_menu_text_button("Open App", NULL);
   g_signal_connect(show_button,
                    "clicked",
                    G_CALLBACK(on_menu_show_clicked),
                    overlay);
 
-  GtkWidget *quit_button = create_menu_button("Quit", "btn-secondary");
+  GtkWidget *text_divider_two = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_widget_add_css_class(text_divider_two, "overlay-menu-divider");
+
+  GtkWidget *quit_button = create_menu_text_button("Quit", "overlay-menu-danger");
   g_signal_connect(quit_button,
                    "clicked",
                    G_CALLBACK(on_menu_quit_clicked),
                    overlay);
 
-  gtk_box_append(GTK_BOX(menu_box), toggle_button);
-  gtk_box_append(GTK_BOX(menu_box), skip_button);
-  gtk_box_append(GTK_BOX(menu_box), stop_button);
-  gtk_box_append(GTK_BOX(menu_box), hide_button);
-  gtk_box_append(GTK_BOX(menu_box), show_button);
-  gtk_box_append(GTK_BOX(menu_box), quit_button);
+  gtk_box_append(GTK_BOX(action_row), toggle_button);
+  gtk_box_append(GTK_BOX(action_row), skip_button);
+  gtk_box_append(GTK_BOX(action_row), stop_button);
+
+  gtk_box_append(GTK_BOX(text_box), hide_button);
+  gtk_box_append(GTK_BOX(text_box), text_divider_one);
+  gtk_box_append(GTK_BOX(text_box), show_button);
+  gtk_box_append(GTK_BOX(text_box), text_divider_two);
+  gtk_box_append(GTK_BOX(text_box), quit_button);
+
+  gtk_box_append(GTK_BOX(menu_box), action_row);
+  gtk_box_append(GTK_BOX(menu_box), actions_divider);
+  gtk_box_append(GTK_BOX(menu_box), text_box);
 
   GtkWidget *popover = gtk_popover_new();
   gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
@@ -918,14 +989,24 @@ overlay_window_update(AppState *state)
 
   if (overlay->menu_toggle_button != NULL) {
     const char *label = NULL;
+    const char *icon_name = "media-playback-start-symbolic";
     if (overlay->timer_state == POMODORO_TIMER_RUNNING) {
       label = "Pause";
+      icon_name = "media-playback-pause-symbolic";
     } else if (overlay->timer_state == POMODORO_TIMER_PAUSED) {
       label = "Resume";
     } else {
       label = phase_action(overlay->phase);
     }
-    gtk_button_set_label(GTK_BUTTON(overlay->menu_toggle_button), label);
+    gtk_widget_set_tooltip_text(overlay->menu_toggle_button, label);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(overlay->menu_toggle_button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   label,
+                                   -1);
+    if (overlay->menu_toggle_icon != NULL) {
+      gtk_image_set_from_icon_name(GTK_IMAGE(overlay->menu_toggle_icon),
+                                   icon_name);
+    }
   }
 
   gboolean has_task = active_task != NULL;

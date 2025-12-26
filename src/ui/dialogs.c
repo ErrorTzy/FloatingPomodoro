@@ -19,12 +19,18 @@ typedef struct {
   GtkWidget *keep_row;
   GtkSpinButton *days_spin;
   GtkSpinButton *keep_spin;
+  gboolean suppress_signals;
+} ArchiveSettingsDialog;
+
+typedef struct {
+  AppState *state;
+  GtkWindow *window;
   GtkSpinButton *focus_spin;
   GtkSpinButton *short_spin;
   GtkSpinButton *long_spin;
   GtkSpinButton *interval_spin;
   gboolean suppress_signals;
-} SettingsDialog;
+} TimerSettingsDialog;
 
 typedef struct {
   GtkWindow *window;
@@ -32,13 +38,49 @@ typedef struct {
   GtkWidget *empty_label;
 } ArchivedDialog;
 
-static void settings_dialog_update_controls(SettingsDialog *dialog);
-static void settings_dialog_update_timer_controls(SettingsDialog *dialog);
+static void archive_settings_update_controls(ArchiveSettingsDialog *dialog);
+static void timer_settings_update_controls(TimerSettingsDialog *dialog);
+
+static GtkWidget *
+create_dialog_icon_button(const char *icon_name,
+                          int size,
+                          const char *tooltip)
+{
+  GtkWidget *button = gtk_button_new();
+  gtk_widget_add_css_class(button, "icon-button");
+  gtk_widget_set_size_request(button, 34, 34);
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+
+  GtkWidget *icon = gtk_image_new_from_icon_name(icon_name);
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), size);
+  gtk_button_set_child(GTK_BUTTON(button), icon);
+
+  if (tooltip != NULL) {
+    gtk_widget_set_tooltip_text(button, tooltip);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   tooltip,
+                                   -1);
+  }
+
+  return button;
+}
 
 static void
-settings_dialog_free(gpointer data)
+archive_settings_dialog_free(gpointer data)
 {
-  SettingsDialog *dialog = data;
+  ArchiveSettingsDialog *dialog = data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  g_free(dialog);
+}
+
+static void
+timer_settings_dialog_free(gpointer data)
+{
+  TimerSettingsDialog *dialog = data;
   if (dialog == NULL) {
     return;
   }
@@ -180,29 +222,57 @@ dialogs_show_confirm(AppState *state,
 }
 
 static void
-on_settings_window_destroy(GtkWidget *widget, gpointer user_data)
+on_archive_settings_window_destroy(GtkWidget *widget, gpointer user_data)
 {
   (void)widget;
-  SettingsDialog *dialog = user_data;
+  ArchiveSettingsDialog *dialog = user_data;
   if (dialog == NULL) {
     return;
   }
 
   dialog->suppress_signals = TRUE;
-  g_info("Settings window destroyed");
+  g_info("Archive settings window destroyed");
   if (dialog->state != NULL) {
-    dialog->state->settings_window = NULL;
+    dialog->state->archive_settings_window = NULL;
   }
 }
 
 static gboolean
-on_settings_window_close(GtkWindow *window, gpointer user_data)
+on_archive_settings_window_close(GtkWindow *window, gpointer user_data)
 {
   (void)window;
-  SettingsDialog *dialog = user_data;
+  ArchiveSettingsDialog *dialog = user_data;
   if (dialog != NULL) {
     dialog->suppress_signals = TRUE;
-    g_info("Settings window close requested");
+    g_info("Archive settings window close requested");
+  }
+  return FALSE;
+}
+
+static void
+on_timer_settings_window_destroy(GtkWidget *widget, gpointer user_data)
+{
+  (void)widget;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  dialog->suppress_signals = TRUE;
+  g_info("Timer settings window destroyed");
+  if (dialog->state != NULL) {
+    dialog->state->timer_settings_window = NULL;
+  }
+}
+
+static gboolean
+on_timer_settings_window_close(GtkWindow *window, gpointer user_data)
+{
+  (void)window;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog != NULL) {
+    dialog->suppress_signals = TRUE;
+    g_info("Timer settings window close requested");
   }
   return FALSE;
 }
@@ -221,14 +291,14 @@ on_archived_window_destroy(GtkWidget *widget, gpointer user_data)
 }
 
 static void
-on_settings_strategy_changed(GObject *object,
-                             GParamSpec *pspec,
-                             gpointer user_data)
+on_archive_settings_strategy_changed(GObject *object,
+                                     GParamSpec *pspec,
+                                     gpointer user_data)
 {
   (void)object;
   (void)pspec;
 
-  SettingsDialog *dialog = user_data;
+  ArchiveSettingsDialog *dialog = user_data;
   if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL ||
       dialog->state->store == NULL) {
     return;
@@ -261,21 +331,21 @@ on_settings_strategy_changed(GObject *object,
   task_store_apply_archive_policy(dialog->state->store);
   task_list_save_store(dialog->state);
   task_list_refresh(dialog->state);
-  settings_dialog_update_controls(dialog);
+  archive_settings_update_controls(dialog);
 }
 
 static void
-on_settings_value_changed(GtkSpinButton *spin, gpointer user_data)
+on_archive_settings_value_changed(GtkSpinButton *spin, gpointer user_data)
 {
   (void)spin;
 
-  SettingsDialog *dialog = user_data;
+  ArchiveSettingsDialog *dialog = user_data;
   if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL ||
       dialog->state->store == NULL) {
     return;
   }
 
-  on_settings_strategy_changed(NULL, NULL, dialog);
+  on_archive_settings_strategy_changed(NULL, NULL, dialog);
 }
 
 static void
@@ -283,7 +353,7 @@ on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data)
 {
   (void)spin;
 
-  SettingsDialog *dialog = user_data;
+  TimerSettingsDialog *dialog = user_data;
   if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL ||
       dialog->state->timer == NULL) {
     return;
@@ -321,7 +391,7 @@ on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data)
 }
 
 static void
-settings_dialog_update_timer_controls(SettingsDialog *dialog)
+timer_settings_update_controls(TimerSettingsDialog *dialog)
 {
   if (dialog == NULL || dialog->state == NULL || dialog->state->timer == NULL) {
     return;
@@ -348,7 +418,7 @@ settings_dialog_update_timer_controls(SettingsDialog *dialog)
 }
 
 static void
-settings_dialog_update_controls(SettingsDialog *dialog)
+archive_settings_update_controls(ArchiveSettingsDialog *dialog)
 {
   if (dialog == NULL || dialog->state == NULL) {
     return;
@@ -392,29 +462,31 @@ settings_dialog_update_controls(SettingsDialog *dialog)
                            strategy.type == TASK_ARCHIVE_KEEP_LATEST);
   }
 
-  settings_dialog_update_timer_controls(dialog);
-
   dialog->suppress_signals = FALSE;
 }
 
 static void
-show_settings_window(AppState *state)
+show_archive_settings_window(AppState *state)
 {
   if (state == NULL) {
     return;
   }
 
-  if (state->settings_window != NULL) {
-    gtk_window_present(state->settings_window);
+  if (state->archive_settings_window != NULL) {
+    gtk_window_present(state->archive_settings_window);
     return;
   }
 
   GtkApplication *app = gtk_window_get_application(state->window);
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Archive Settings");
-  gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
+  if (state->archived_window != NULL) {
+    gtk_window_set_transient_for(GTK_WINDOW(window), state->archived_window);
+  } else {
+    gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
+  }
   gtk_window_set_modal(GTK_WINDOW(window), TRUE);
-  gtk_window_set_default_size(GTK_WINDOW(window), 420, 320);
+  gtk_window_set_default_size(GTK_WINDOW(window), 420, 260);
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
   gtk_widget_set_margin_top(root, 18);
@@ -464,9 +536,96 @@ show_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_label);
   gtk_box_append(GTK_BOX(archive_keep_row), archive_keep_spin);
 
-  GtkWidget *timer_section_title = gtk_label_new("Timer durations");
-  gtk_widget_add_css_class(timer_section_title, "section-title");
-  gtk_widget_set_halign(timer_section_title, GTK_ALIGN_START);
+  GtkWidget *hint =
+      gtk_label_new("Changes apply immediately and can be adjusted anytime.");
+  gtk_widget_add_css_class(hint, "task-meta");
+  gtk_widget_set_halign(hint, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+
+  gtk_box_append(GTK_BOX(root), title);
+  gtk_box_append(GTK_BOX(root), desc);
+  gtk_box_append(GTK_BOX(root), archive_dropdown);
+  gtk_box_append(GTK_BOX(root), archive_days_row);
+  gtk_box_append(GTK_BOX(root), archive_keep_row);
+  gtk_box_append(GTK_BOX(root), hint);
+
+  gtk_window_set_child(GTK_WINDOW(window), root);
+  state->archive_settings_window = GTK_WINDOW(window);
+
+  ArchiveSettingsDialog *dialog = g_new0(ArchiveSettingsDialog, 1);
+  dialog->state = state;
+  dialog->window = GTK_WINDOW(window);
+  dialog->dropdown = archive_dropdown;
+  dialog->days_row = archive_days_row;
+  dialog->keep_row = archive_keep_row;
+  dialog->days_spin = GTK_SPIN_BUTTON(archive_days_spin);
+  dialog->keep_spin = GTK_SPIN_BUTTON(archive_keep_spin);
+
+  g_signal_connect(archive_dropdown,
+                   "notify::selected",
+                   G_CALLBACK(on_archive_settings_strategy_changed),
+                   dialog);
+  g_signal_connect(archive_days_spin,
+                   "value-changed",
+                   G_CALLBACK(on_archive_settings_value_changed),
+                   dialog);
+  g_signal_connect(archive_keep_spin,
+                   "value-changed",
+                   G_CALLBACK(on_archive_settings_value_changed),
+                   dialog);
+
+  g_object_set_data_full(G_OBJECT(window),
+                         "archive-settings-dialog",
+                         dialog,
+                         archive_settings_dialog_free);
+
+  g_signal_connect(window,
+                   "close-request",
+                   G_CALLBACK(on_archive_settings_window_close),
+                   dialog);
+  g_signal_connect(window,
+                   "destroy",
+                   G_CALLBACK(on_archive_settings_window_destroy),
+                   dialog);
+
+  archive_settings_update_controls(dialog);
+  gtk_window_present(GTK_WINDOW(window));
+}
+
+static void
+show_timer_settings_window(AppState *state)
+{
+  if (state == NULL) {
+    return;
+  }
+
+  if (state->timer_settings_window != NULL) {
+    gtk_window_present(state->timer_settings_window);
+    return;
+  }
+
+  GtkApplication *app = gtk_window_get_application(state->window);
+  GtkWidget *window = gtk_application_window_new(app);
+  gtk_window_set_title(GTK_WINDOW(window), "Timer Settings");
+  gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
+  gtk_window_set_modal(GTK_WINDOW(window), TRUE);
+  gtk_window_set_default_size(GTK_WINDOW(window), 420, 320);
+
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(root, 18);
+  gtk_widget_set_margin_bottom(root, 18);
+  gtk_widget_set_margin_start(root, 18);
+  gtk_widget_set_margin_end(root, 18);
+
+  GtkWidget *title = gtk_label_new("Pomodoro timer");
+  gtk_widget_add_css_class(title, "card-title");
+  gtk_widget_set_halign(title, GTK_ALIGN_START);
+
+  GtkWidget *desc =
+      gtk_label_new("Tune your focus and break durations. Updates apply instantly.");
+  gtk_widget_add_css_class(desc, "task-meta");
+  gtk_widget_set_halign(desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(desc), TRUE);
 
   GtkWidget *focus_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *focus_label = gtk_label_new("Focus minutes");
@@ -528,10 +687,6 @@ show_settings_window(AppState *state)
 
   gtk_box_append(GTK_BOX(root), title);
   gtk_box_append(GTK_BOX(root), desc);
-  gtk_box_append(GTK_BOX(root), archive_dropdown);
-  gtk_box_append(GTK_BOX(root), archive_days_row);
-  gtk_box_append(GTK_BOX(root), archive_keep_row);
-  gtk_box_append(GTK_BOX(root), timer_section_title);
   gtk_box_append(GTK_BOX(root), focus_row);
   gtk_box_append(GTK_BOX(root), short_row);
   gtk_box_append(GTK_BOX(root), long_row);
@@ -539,33 +694,16 @@ show_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(root), hint);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
-  state->settings_window = GTK_WINDOW(window);
+  state->timer_settings_window = GTK_WINDOW(window);
 
-  SettingsDialog *dialog = g_new0(SettingsDialog, 1);
+  TimerSettingsDialog *dialog = g_new0(TimerSettingsDialog, 1);
   dialog->state = state;
   dialog->window = GTK_WINDOW(window);
-  dialog->dropdown = archive_dropdown;
-  dialog->days_row = archive_days_row;
-  dialog->keep_row = archive_keep_row;
-  dialog->days_spin = GTK_SPIN_BUTTON(archive_days_spin);
-  dialog->keep_spin = GTK_SPIN_BUTTON(archive_keep_spin);
   dialog->focus_spin = GTK_SPIN_BUTTON(focus_spin);
   dialog->short_spin = GTK_SPIN_BUTTON(short_spin);
   dialog->long_spin = GTK_SPIN_BUTTON(long_spin);
   dialog->interval_spin = GTK_SPIN_BUTTON(interval_spin);
 
-  g_signal_connect(archive_dropdown,
-                   "notify::selected",
-                   G_CALLBACK(on_settings_strategy_changed),
-                   dialog);
-  g_signal_connect(archive_days_spin,
-                   "value-changed",
-                   G_CALLBACK(on_settings_value_changed),
-                   dialog);
-  g_signal_connect(archive_keep_spin,
-                   "value-changed",
-                   G_CALLBACK(on_settings_value_changed),
-                   dialog);
   g_signal_connect(focus_spin,
                    "value-changed",
                    G_CALLBACK(on_timer_settings_changed),
@@ -584,20 +722,20 @@ show_settings_window(AppState *state)
                    dialog);
 
   g_object_set_data_full(G_OBJECT(window),
-                         "settings-dialog",
+                         "timer-settings-dialog",
                          dialog,
-                         settings_dialog_free);
+                         timer_settings_dialog_free);
 
   g_signal_connect(window,
                    "close-request",
-                   G_CALLBACK(on_settings_window_close),
+                   G_CALLBACK(on_timer_settings_window_close),
                    dialog);
   g_signal_connect(window,
                    "destroy",
-                   G_CALLBACK(on_settings_window_destroy),
+                   G_CALLBACK(on_timer_settings_window_destroy),
                    dialog);
 
-  settings_dialog_update_controls(dialog);
+  timer_settings_update_controls(dialog);
   gtk_window_present(GTK_WINDOW(window));
 }
 
@@ -635,9 +773,24 @@ show_archived_window(AppState *state)
   gtk_widget_set_margin_start(root, 18);
   gtk_widget_set_margin_end(root, 18);
 
+  GtkWidget *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_hexpand(header, TRUE);
+  gtk_widget_set_halign(header, GTK_ALIGN_FILL);
+
   GtkWidget *title = gtk_label_new("Archived tasks");
   gtk_widget_add_css_class(title, "card-title");
   gtk_widget_set_halign(title, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(title, TRUE);
+
+  GtkWidget *settings_button =
+      create_dialog_icon_button("pomodoro-edit-symbolic", 18, "Archive settings");
+  g_signal_connect(settings_button,
+                   "clicked",
+                   G_CALLBACK(dialogs_on_show_archive_settings_clicked),
+                   state);
+
+  gtk_box_append(GTK_BOX(header), title);
+  gtk_box_append(GTK_BOX(header), settings_button);
 
   GtkWidget *desc =
       gtk_label_new("Restore tasks to bring them back into your active list.");
@@ -667,7 +820,7 @@ show_archived_window(AppState *state)
   gtk_widget_set_halign(archived_empty_label, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(archived_empty_label), TRUE);
 
-  gtk_box_append(GTK_BOX(root), title);
+  gtk_box_append(GTK_BOX(root), header);
   gtk_box_append(GTK_BOX(root), desc);
   gtk_box_append(GTK_BOX(root), archived_scroller);
   gtk_box_append(GTK_BOX(root), archived_empty_label);
@@ -693,10 +846,17 @@ show_archived_window(AppState *state)
 }
 
 void
-dialogs_on_show_settings_clicked(GtkButton *button, gpointer user_data)
+dialogs_on_show_archive_settings_clicked(GtkButton *button, gpointer user_data)
 {
   (void)button;
-  show_settings_window((AppState *)user_data);
+  show_archive_settings_window((AppState *)user_data);
+}
+
+void
+dialogs_on_show_timer_settings_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  show_timer_settings_window((AppState *)user_data);
 }
 
 void
@@ -707,20 +867,39 @@ dialogs_on_show_archived_clicked(GtkButton *button, gpointer user_data)
 }
 
 void
-dialogs_cleanup_settings(AppState *state)
+dialogs_cleanup_archive_settings(AppState *state)
 {
-  if (state == NULL || state->settings_window == NULL) {
+  if (state == NULL || state->archive_settings_window == NULL) {
     return;
   }
 
-  SettingsDialog *dialog =
-      g_object_get_data(G_OBJECT(state->settings_window), "settings-dialog");
+  ArchiveSettingsDialog *dialog = g_object_get_data(
+      G_OBJECT(state->archive_settings_window),
+      "archive-settings-dialog");
   if (dialog != NULL) {
     dialog->state = NULL;
   }
 
-  gtk_window_destroy(state->settings_window);
-  state->settings_window = NULL;
+  gtk_window_destroy(state->archive_settings_window);
+  state->archive_settings_window = NULL;
+}
+
+void
+dialogs_cleanup_timer_settings(AppState *state)
+{
+  if (state == NULL || state->timer_settings_window == NULL) {
+    return;
+  }
+
+  TimerSettingsDialog *dialog = g_object_get_data(
+      G_OBJECT(state->timer_settings_window),
+      "timer-settings-dialog");
+  if (dialog != NULL) {
+    dialog->state = NULL;
+  }
+
+  gtk_window_destroy(state->timer_settings_window);
+  state->timer_settings_window = NULL;
 }
 
 void

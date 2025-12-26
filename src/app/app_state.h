@@ -11,7 +11,8 @@ typedef struct {
   TaskStore *store;
   PomodoroTimer *timer;
   GtkWindow *window;
-  GtkWindow *settings_window;
+  GtkWindow *archive_settings_window;
+  GtkWindow *timer_settings_window;
   GtkWindow *archived_window;
   GtkWindow *overlay_window;
   TaskRowControls *editing_controls;
@@ -26,6 +27,7 @@ typedef struct {
   GtkWidget *timer_value_label;
   GtkWidget *timer_pill_label;
   GtkWidget *timer_start_button;
+  GtkWidget *timer_start_icon;
   GtkWidget *timer_skip_button;
   GtkWidget *timer_stop_button;
   GtkWidget *overlay_toggle_button;

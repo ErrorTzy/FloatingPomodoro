@@ -53,6 +53,28 @@ format_timer_value(gint64 seconds)
 }
 
 static void
+set_icon_button_label(GtkWidget *button, const char *label)
+{
+  if (button == NULL || label == NULL) {
+    return;
+  }
+
+  gtk_widget_set_tooltip_text(button, label);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 label,
+                                 -1);
+}
+
+static GtkWidget *
+create_action_icon(const char *icon_name, int size)
+{
+  GtkWidget *icon = gtk_image_new_from_icon_name(icon_name);
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), size);
+  return icon;
+}
+
+static void
 update_timer_stats(AppState *state, PomodoroTimer *timer)
 {
   if (state == NULL || timer == NULL) {
@@ -122,14 +144,19 @@ main_window_update_timer_ui(AppState *state)
 
   if (state->timer_start_button != NULL) {
     const char *label = NULL;
+    const char *icon_name = "media-playback-start-symbolic";
     if (run_state == POMODORO_TIMER_RUNNING) {
       label = "Pause";
+      icon_name = "media-playback-pause-symbolic";
     } else if (run_state == POMODORO_TIMER_PAUSED) {
       label = "Resume";
     } else {
       label = timer_phase_action(phase);
     }
-    gtk_button_set_label(GTK_BUTTON(state->timer_start_button), label);
+    set_icon_button_label(state->timer_start_button, label);
+    if (state->timer_start_icon != NULL) {
+      gtk_image_set_from_icon_name(GTK_IMAGE(state->timer_start_icon), icon_name);
+    }
     gtk_widget_set_sensitive(state->timer_start_button, has_task);
   }
 
@@ -310,17 +337,27 @@ main_window_present(GtkApplication *app)
   GtkWidget *action_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_widget_set_halign(action_row, GTK_ALIGN_START);
 
-  GtkWidget *settings_button = gtk_button_new_with_label("Archive Settings");
-  gtk_widget_add_css_class(settings_button, "btn-secondary");
-  gtk_widget_add_css_class(settings_button, "btn-compact");
-  g_signal_connect(settings_button,
+  GtkWidget *timer_settings_button = gtk_button_new();
+  gtk_widget_add_css_class(timer_settings_button, "icon-button");
+  gtk_widget_set_size_request(timer_settings_button, 36, 36);
+  gtk_widget_set_valign(timer_settings_button, GTK_ALIGN_CENTER);
+  GtkWidget *timer_settings_icon =
+      create_action_icon("pomodoro-timer-settings-symbolic", 20);
+  gtk_button_set_child(GTK_BUTTON(timer_settings_button), timer_settings_icon);
+  set_icon_button_label(timer_settings_button, "Timer settings");
+  g_signal_connect(timer_settings_button,
                    "clicked",
-                   G_CALLBACK(dialogs_on_show_settings_clicked),
+                   G_CALLBACK(dialogs_on_show_timer_settings_clicked),
                    state);
 
-  GtkWidget *archived_button = gtk_button_new_with_label("Archived Tasks");
-  gtk_widget_add_css_class(archived_button, "btn-secondary");
-  gtk_widget_add_css_class(archived_button, "btn-compact");
+  GtkWidget *archived_button = gtk_button_new();
+  gtk_widget_add_css_class(archived_button, "icon-button");
+  gtk_widget_set_size_request(archived_button, 36, 36);
+  gtk_widget_set_valign(archived_button, GTK_ALIGN_CENTER);
+  GtkWidget *archived_icon =
+      create_action_icon("pomodoro-archive-symbolic", 20);
+  gtk_button_set_child(GTK_BUTTON(archived_button), archived_icon);
+  set_icon_button_label(archived_button, "Archived tasks");
   g_signal_connect(archived_button,
                    "clicked",
                    G_CALLBACK(dialogs_on_show_archived_clicked),
@@ -343,7 +380,7 @@ main_window_present(GtkApplication *app)
   state->overlay_toggle_icon = overlay_toggle_icon;
   overlay_window_sync_toggle_icon(state);
 
-  gtk_box_append(GTK_BOX(action_row), settings_button);
+  gtk_box_append(GTK_BOX(action_row), timer_settings_button);
   gtk_box_append(GTK_BOX(action_row), archived_button);
   gtk_box_append(GTK_BOX(action_row), overlay_toggle_button);
   gtk_box_append(GTK_BOX(root), action_row);
@@ -373,24 +410,41 @@ main_window_present(GtkApplication *app)
   GtkWidget *timer_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_widget_set_halign(timer_actions, GTK_ALIGN_START);
 
-  GtkWidget *start_button = gtk_button_new_with_label("Start Focus");
-  gtk_widget_add_css_class(start_button, "btn-primary");
+  GtkWidget *start_button = gtk_button_new();
+  gtk_widget_add_css_class(start_button, "icon-button");
+  gtk_widget_set_size_request(start_button, 40, 40);
+  GtkWidget *start_icon =
+      create_action_icon("media-playback-start-symbolic", 22);
+  gtk_button_set_child(GTK_BUTTON(start_button), start_icon);
+  set_icon_button_label(start_button, "Start Focus");
   g_signal_connect(start_button,
                    "clicked",
                    G_CALLBACK(on_timer_start_clicked),
                    state);
   state->timer_start_button = start_button;
+  state->timer_start_icon = start_icon;
 
-  GtkWidget *skip_button = gtk_button_new_with_label("Skip");
-  gtk_widget_add_css_class(skip_button, "btn-secondary");
+  GtkWidget *skip_button = gtk_button_new();
+  gtk_widget_add_css_class(skip_button, "icon-button");
+  gtk_widget_set_size_request(skip_button, 40, 40);
+  GtkWidget *skip_icon =
+      create_action_icon("media-skip-forward-symbolic", 20);
+  gtk_button_set_child(GTK_BUTTON(skip_button), skip_icon);
+  set_icon_button_label(skip_button, "Skip");
   g_signal_connect(skip_button,
                    "clicked",
                    G_CALLBACK(on_timer_skip_clicked),
                    state);
   state->timer_skip_button = skip_button;
 
-  GtkWidget *stop_button = gtk_button_new_with_label("Stop");
-  gtk_widget_add_css_class(stop_button, "btn-danger");
+  GtkWidget *stop_button = gtk_button_new();
+  gtk_widget_add_css_class(stop_button, "icon-button");
+  gtk_widget_add_css_class(stop_button, "icon-danger");
+  gtk_widget_set_size_request(stop_button, 40, 40);
+  GtkWidget *stop_icon =
+      create_action_icon("media-playback-stop-symbolic", 20);
+  gtk_button_set_child(GTK_BUTTON(stop_button), stop_icon);
+  set_icon_button_label(stop_button, "Stop");
   g_signal_connect(stop_button,
                    "clicked",
                    G_CALLBACK(on_timer_stop_clicked),
@@ -495,10 +549,15 @@ main_window_present(GtkApplication *app)
                    state);
   state->task_entry = task_entry;
 
-  GtkWidget *task_add_button = gtk_button_new_with_label("Add");
-  gtk_widget_add_css_class(task_add_button, "btn-primary");
+  GtkWidget *task_add_button = gtk_button_new();
+  gtk_widget_add_css_class(task_add_button, "icon-button");
   gtk_widget_add_css_class(task_add_button, "task-add");
+  gtk_widget_set_size_request(task_add_button, 36, 36);
   gtk_widget_set_valign(task_add_button, GTK_ALIGN_CENTER);
+  GtkWidget *task_add_icon =
+      create_action_icon("list-add-symbolic", 20);
+  gtk_button_set_child(GTK_BUTTON(task_add_button), task_add_icon);
+  set_icon_button_label(task_add_button, "Add task");
   g_signal_connect(task_add_button,
                    "clicked",
                    G_CALLBACK(task_list_on_add_clicked),
