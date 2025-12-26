@@ -182,6 +182,21 @@ app_init_fonts(void)
 }
 
 void
+app_init_icons(void)
+{
+  GdkDisplay *display = gdk_display_get_default();
+  if (display == NULL) {
+    g_debug("No display available for icon theme setup");
+    return;
+  }
+
+  GtkIconTheme *theme = gtk_icon_theme_get_for_display(display);
+  gtk_icon_theme_add_resource_path(
+      theme,
+      "/com/scott/Xfce4FloatingPomodoro/icons");
+}
+
+void
 app_load_css(void)
 {
   GtkCssProvider *provider = gtk_css_provider_new();

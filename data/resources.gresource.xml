@@ -6,5 +6,9 @@
     <file>fonts/Manrope-SemiBold.ttf</file>
     <file>fonts/Manrope-Bold.ttf</file>
     <file>fonts/OFL.txt</file>
+    <file>icons/scalable/actions/pomodoro-archive-symbolic.svg</file>
+    <file>icons/scalable/actions/pomodoro-delete-symbolic.svg</file>
+    <file>icons/scalable/actions/pomodoro-edit-symbolic.svg</file>
+    <file>icons/scalable/actions/pomodoro-restore-symbolic.svg</file>
   </gresource>
 </gresources>

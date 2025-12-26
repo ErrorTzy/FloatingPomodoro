@@ -137,9 +137,13 @@ button.icon-button {
   background-image: none;
   border: none;
   border-radius: 999px;
-  padding: 4px;
+  padding: 3px;
   color: @pomodoro_primary;
   box-shadow: none;
+}
+
+button.icon-button image {
+  color: inherit;
 }
 
 button.icon-button:hover {
@@ -151,6 +155,10 @@ button.icon-button:focus-visible {
 }
 
 button.icon-danger {
+  color: @pomodoro_error;
+}
+
+button.icon-danger image {
   color: @pomodoro_error;
 }
 

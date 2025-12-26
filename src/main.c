@@ -11,6 +11,7 @@ on_startup(GApplication *app, gpointer user_data)
   (void)user_data;
 
   app_init_fonts();
+  app_init_icons();
   app_load_css();
 }
 

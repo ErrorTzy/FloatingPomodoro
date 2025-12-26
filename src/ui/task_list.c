@@ -22,6 +22,14 @@ static void on_task_archive_clicked(GtkButton *button, gpointer user_data);
 static void on_task_restore_clicked(GtkButton *button, gpointer user_data);
 static void on_task_delete_clicked(GtkButton *button, gpointer user_data);
 
+static GtkWidget *
+create_task_icon(const char *icon_name)
+{
+  GtkWidget *image = gtk_image_new_from_icon_name(icon_name);
+  gtk_image_set_pixel_size(GTK_IMAGE(image), 20);
+  return image;
+}
+
 static PomodoroTask *find_active_task(TaskStore *store);
 static void update_current_task_summary(AppState *state);
 static void append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task);
@@ -520,11 +528,11 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
                    G_CALLBACK(on_task_status_clicked),
                    state);
 
-  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
 
   GtkWidget *edit_button = gtk_button_new();
-  GtkWidget *edit_icon = gtk_image_new_from_icon_name("document-edit-symbolic");
+  GtkWidget *edit_icon = create_task_icon("pomodoro-edit-symbolic");
   gtk_button_set_child(GTK_BUTTON(edit_button), edit_icon);
   gtk_widget_add_css_class(edit_button, "icon-button");
   gtk_widget_set_tooltip_text(edit_button, "Edit task");
@@ -533,7 +541,7 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
 
   if (status == TASK_STATUS_ARCHIVED) {
     GtkWidget *restore_button = gtk_button_new();
-    GtkWidget *restore_icon = gtk_image_new_from_icon_name("edit-undo-symbolic");
+    GtkWidget *restore_icon = create_task_icon("pomodoro-restore-symbolic");
     gtk_button_set_child(GTK_BUTTON(restore_button), restore_icon);
     gtk_widget_add_css_class(restore_button, "icon-button");
     gtk_widget_set_tooltip_text(restore_button, "Restore task");
@@ -545,7 +553,7 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
     gtk_box_append(GTK_BOX(actions), restore_button);
   } else {
     GtkWidget *archive_button = gtk_button_new();
-    GtkWidget *archive_icon = gtk_image_new_from_icon_name("archive-symbolic");
+    GtkWidget *archive_icon = create_task_icon("pomodoro-archive-symbolic");
     gtk_button_set_child(GTK_BUTTON(archive_button), archive_icon);
     gtk_widget_add_css_class(archive_button, "icon-button");
     gtk_widget_set_tooltip_text(archive_button, "Archive task");
@@ -558,7 +566,7 @@ append_task_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   }
 
   GtkWidget *delete_button = gtk_button_new();
-  GtkWidget *delete_icon = gtk_image_new_from_icon_name("window-close-symbolic");
+  GtkWidget *delete_icon = create_task_icon("pomodoro-delete-symbolic");
   gtk_button_set_child(GTK_BUTTON(delete_button), delete_icon);
   gtk_widget_add_css_class(delete_button, "icon-button");
   gtk_widget_add_css_class(delete_button, "icon-danger");
