@@ -1,0 +1,25 @@
+#pragma once
+
+#include <gtk/gtk.h>
+
+#include "core/task_store.h"
+
+typedef struct _TaskRowControls TaskRowControls;
+
+typedef struct {
+  TaskStore *store;
+  GtkWindow *window;
+  GtkWindow *settings_window;
+  GtkWindow *archived_window;
+  TaskRowControls *editing_controls;
+  GtkWidget *task_list;
+  GtkWidget *task_empty_label;
+  GtkWidget *task_entry;
+  GtkWidget *task_repeat_spin;
+  GtkWidget *task_repeat_hint;
+  GtkWidget *current_task_label;
+  GtkWidget *current_task_meta;
+} AppState;
+
+AppState *app_state_create(GtkWindow *window, TaskStore *store);
+void app_state_free(gpointer data);

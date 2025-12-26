@@ -112,6 +112,7 @@ Constraints:
 Notes:
 - The exact structure may change after initial scaffolding, but separation between core, UI, overlay, tray, and focus guard is required.
 - Keep platform‑specific X11 code isolated in `focus/` or `utils/x11/`.
+- Current structure includes `src/app/` (app init + state) and `src/ui/` (main window, dialogs, task list) with `src/main.c` acting as a thin entry point.
 
 ## 6) Coding Standards
 
@@ -234,3 +235,4 @@ Each PR includes motivation, implementation instructions, and testable standards
 - Overlay always visible; no click‑through.
 - Only Chrome supported for relevance checks (for now).
 - Modern visual design prioritized over default GTK styling.
+- 2025-12-26: Refactored `src/main.c` into `src/app/` and `src/ui/` modules to enforce separation of concerns; `src/main.c` now only boots the app.
