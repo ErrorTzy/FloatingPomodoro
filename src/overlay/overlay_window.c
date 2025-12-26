@@ -6,6 +6,8 @@
 #include "core/task_store.h"
 #include "utils/x11.h"
 
+#define OVERLAY_INFO_REVEAL_DURATION_MS 220
+
 typedef struct {
   AppState *state;
   GtkWindow *window;
@@ -21,6 +23,7 @@ typedef struct {
   GtkWidget *menu_toggle_button;
   GtkWidget *menu_skip_button;
   GtkWidget *menu_stop_button;
+  gboolean menu_open;
   gdouble progress;
   gdouble opacity;
   PomodoroPhase phase;
@@ -60,6 +63,74 @@ format_timer_value(gint64 seconds)
   return g_strdup_printf("%02" G_GINT64_FORMAT ":%02" G_GINT64_FORMAT,
                          minutes,
                          secs);
+}
+
+static void
+overlay_set_info_revealed(OverlayWindow *overlay, gboolean reveal, gboolean animate)
+{
+  if (overlay == NULL || overlay->info_revealer == NULL) {
+    return;
+  }
+
+  gtk_revealer_set_transition_duration(
+      GTK_REVEALER(overlay->info_revealer),
+      animate ? OVERLAY_INFO_REVEAL_DURATION_MS : 0);
+  gtk_revealer_set_reveal_child(GTK_REVEALER(overlay->info_revealer), reveal);
+}
+
+static gboolean
+overlay_pointer_inside_root(OverlayWindow *overlay)
+{
+  if (overlay == NULL || overlay->window == NULL || overlay->root == NULL) {
+    return FALSE;
+  }
+
+  GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(overlay->window));
+  if (surface == NULL) {
+    return FALSE;
+  }
+
+  GdkDisplay *display = gdk_surface_get_display(surface);
+  if (display == NULL) {
+    return FALSE;
+  }
+
+  GdkSeat *seat = gdk_display_get_default_seat(display);
+  if (seat == NULL) {
+    return FALSE;
+  }
+
+  GdkDevice *device = gdk_seat_get_pointer(seat);
+  if (device == NULL) {
+    return FALSE;
+  }
+
+  double x = 0.0;
+  double y = 0.0;
+  if (!gdk_surface_get_device_position(surface, device, &x, &y, NULL)) {
+    return FALSE;
+  }
+
+  graphene_point_t point = {x, y};
+  graphene_point_t local = {0};
+  if (!gtk_widget_compute_point(GTK_WIDGET(overlay->window),
+                                overlay->root,
+                                &point,
+                                &local)) {
+    return FALSE;
+  }
+
+  return gtk_widget_contains(overlay->root, local.x, local.y);
+}
+
+static void
+overlay_sync_hover_state(OverlayWindow *overlay)
+{
+  if (overlay == NULL || overlay->menu_open) {
+    return;
+  }
+
+  overlay_set_info_revealed(overlay, overlay_pointer_inside_root(overlay), TRUE);
 }
 
 static const char *
@@ -259,7 +330,11 @@ on_overlay_pointer_enter(GtkEventControllerMotion *controller,
     return;
   }
 
-  gtk_revealer_set_reveal_child(GTK_REVEALER(overlay->info_revealer), TRUE);
+  if (overlay->menu_open) {
+    return;
+  }
+
+  overlay_set_info_revealed(overlay, TRUE, TRUE);
 }
 
 static void
@@ -272,7 +347,11 @@ on_overlay_pointer_leave(GtkEventControllerMotion *controller,
     return;
   }
 
-  gtk_revealer_set_reveal_child(GTK_REVEALER(overlay->info_revealer), FALSE);
+  if (overlay->menu_open) {
+    return;
+  }
+
+  overlay_set_info_revealed(overlay, FALSE, TRUE);
 }
 
 static void
@@ -298,11 +377,27 @@ on_overlay_drag_begin(GtkGestureDrag *gesture,
 }
 
 static void
+on_menu_popover_closed(GtkPopover *popover, gpointer user_data)
+{
+  (void)popover;
+  OverlayWindow *overlay = user_data;
+  if (overlay == NULL) {
+    return;
+  }
+
+  overlay->menu_open = FALSE;
+  overlay_sync_hover_state(overlay);
+}
+
+static void
 overlay_pop_menu(OverlayWindow *overlay, gdouble x, gdouble y)
 {
   if (overlay == NULL || overlay->menu_popover == NULL || overlay->root == NULL) {
     return;
   }
+
+  overlay->menu_open = TRUE;
+  overlay_set_info_revealed(overlay, FALSE, FALSE);
 
   GdkRectangle rect = {(int)x, (int)y, 1, 1};
   gtk_popover_set_pointing_to(GTK_POPOVER(overlay->menu_popover), &rect);
@@ -548,7 +643,8 @@ overlay_window_create(GtkApplication *app, AppState *state)
   GtkWidget *revealer = gtk_revealer_new();
   gtk_revealer_set_transition_type(GTK_REVEALER(revealer),
                                    GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
-  gtk_revealer_set_transition_duration(GTK_REVEALER(revealer), 220);
+  gtk_revealer_set_transition_duration(GTK_REVEALER(revealer),
+                                       OVERLAY_INFO_REVEAL_DURATION_MS);
   gtk_revealer_set_reveal_child(GTK_REVEALER(revealer), FALSE);
   overlay->info_revealer = revealer;
 
@@ -655,6 +751,10 @@ overlay_window_create(GtkApplication *app, AppState *state)
   GtkWidget *popover = gtk_popover_new();
   gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
   gtk_popover_set_autohide(GTK_POPOVER(popover), TRUE);
+  g_signal_connect(popover,
+                   "closed",
+                   G_CALLBACK(on_menu_popover_closed),
+                   overlay);
   gtk_popover_set_child(GTK_POPOVER(popover), menu_box);
   gtk_widget_add_css_class(popover, "overlay-menu-popover");
   gtk_widget_set_parent(popover, root);
