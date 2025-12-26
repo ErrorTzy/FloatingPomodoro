@@ -134,12 +134,12 @@ main_window_update_timer_ui(AppState *state)
 
   if (state->timer_skip_button != NULL) {
     gtk_widget_set_sensitive(state->timer_skip_button,
-                             run_state != POMODORO_TIMER_STOPPED);
+                             has_task && run_state != POMODORO_TIMER_STOPPED);
   }
 
   if (state->timer_stop_button != NULL) {
     gtk_widget_set_sensitive(state->timer_stop_button,
-                             run_state != POMODORO_TIMER_STOPPED);
+                             has_task && run_state != POMODORO_TIMER_STOPPED);
   }
 
   update_timer_stats(state, timer);
