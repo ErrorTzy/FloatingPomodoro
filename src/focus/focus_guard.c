@@ -55,16 +55,33 @@ struct _FocusGuard {
 static gint
 focus_guard_usage_compare_desc(gconstpointer a, gconstpointer b)
 {
-  const FocusGuardUsage *left = a;
-  const FocusGuardUsage *right = b;
-  if (left == NULL || right == NULL) {
+  const FocusGuardUsage *left = *(const FocusGuardUsage *const *)a;
+  const FocusGuardUsage *right = *(const FocusGuardUsage *const *)b;
+  if (left == right) {
     return 0;
   }
-  if (left->usec_total == right->usec_total) {
-    return 0;
+  if (left == NULL) {
+    return 1;
   }
-  return left->usec_total < right->usec_total ? 1 : -1;
+  if (right == NULL) {
+    return -1;
+  }
+  if (left->usec_total < right->usec_total) {
+    return 1;
+  }
+  if (left->usec_total > right->usec_total) {
+    return -1;
+  }
+
+  const char *left_name = left->display_name != NULL ? left->display_name : "";
+  const char *right_name = right->display_name != NULL ? right->display_name : "";
+  gint name_cmp = g_ascii_strcasecmp(left_name, right_name);
+  if (name_cmp != 0) {
+    return name_cmp;
+  }
+  return g_strcmp0(left_name, right_name);
 }
+
 
 static void
 focus_guard_usage_free(gpointer data)
