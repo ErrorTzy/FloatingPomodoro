@@ -2,6 +2,7 @@
 #include "ui/dialogs_timer_settings_internal.h"
 
 #include "core/pomodoro_timer.h"
+#include "focus/focus_guard.h"
 #include "storage/settings_storage.h"
 
 static void timer_settings_update_controls(TimerSettingsDialog *dialog);
@@ -175,28 +176,70 @@ show_timer_settings_window(AppState *state)
 
   GtkApplication *app = gtk_window_get_application(state->window);
   GtkWidget *window = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(window), "Timer Settings");
+  gtk_window_set_title(GTK_WINDOW(window), "Settings");
   gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
   gtk_window_set_modal(GTK_WINDOW(window), TRUE);
-  gtk_window_set_default_size(GTK_WINDOW(window), 460, 560);
+  gtk_window_set_default_size(GTK_WINDOW(window), 720, 620);
 
-  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_set_margin_top(root, 18);
-  gtk_widget_set_margin_bottom(root, 18);
-  gtk_widget_set_margin_start(root, 18);
-  gtk_widget_set_margin_end(root, 18);
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  gtk_widget_set_margin_top(root, 20);
+  gtk_widget_set_margin_bottom(root, 20);
+  gtk_widget_set_margin_start(root, 20);
+  gtk_widget_set_margin_end(root, 20);
+  gtk_widget_add_css_class(root, "settings-root");
 
-  GtkWidget *title = gtk_label_new("Pomodoro timer");
-  gtk_widget_add_css_class(title, "card-title");
+  GtkWidget *header = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  GtkWidget *title = gtk_label_new("Settings");
+  gtk_widget_add_css_class(title, "settings-title");
   gtk_widget_set_halign(title, GTK_ALIGN_START);
 
-  GtkWidget *desc =
-      gtk_label_new("Tune your focus and break durations. Updates apply instantly.");
-  gtk_widget_add_css_class(desc, "task-meta");
+  GtkWidget *desc = gtk_label_new(
+      "Customize your timer and focus guard. Changes apply instantly.");
+  gtk_widget_add_css_class(desc, "settings-subtitle");
   gtk_widget_set_halign(desc, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(desc), TRUE);
 
-  GtkWidget *focus_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_box_append(GTK_BOX(header), title);
+  gtk_box_append(GTK_BOX(header), desc);
+  gtk_box_append(GTK_BOX(root), header);
+
+  GtkWidget *stack = gtk_stack_new();
+  gtk_stack_set_transition_type(GTK_STACK(stack),
+                                GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+  gtk_stack_set_transition_duration(GTK_STACK(stack), 180);
+  gtk_widget_set_vexpand(stack, TRUE);
+
+  GtkWidget *switcher = gtk_stack_switcher_new();
+  gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(switcher), GTK_STACK(stack));
+  gtk_widget_add_css_class(switcher, "settings-switcher");
+  gtk_widget_set_halign(switcher, GTK_ALIGN_START);
+  gtk_box_append(GTK_BOX(root), switcher);
+  gtk_box_append(GTK_BOX(root), stack);
+
+  GtkWidget *timer_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  gtk_widget_add_css_class(timer_page, "settings-page");
+  gtk_widget_set_margin_top(timer_page, 4);
+  gtk_widget_set_margin_bottom(timer_page, 8);
+  gtk_widget_set_margin_start(timer_page, 2);
+  gtk_widget_set_margin_end(timer_page, 2);
+
+  GtkWidget *timer_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(timer_card, "card");
+
+  GtkWidget *timer_title = gtk_label_new("Timer cycle");
+  gtk_widget_add_css_class(timer_title, "card-title");
+  gtk_widget_set_halign(timer_title, GTK_ALIGN_START);
+
+  GtkWidget *timer_desc =
+      gtk_label_new("Adjust the cadence of focus and recovery.");
+  gtk_widget_add_css_class(timer_desc, "task-meta");
+  gtk_widget_set_halign(timer_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(timer_desc), TRUE);
+
+  GtkWidget *timer_grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(timer_grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(timer_grid), 16);
+
   GtkWidget *focus_label = gtk_label_new("Focus minutes");
   gtk_widget_add_css_class(focus_label, "setting-label");
   gtk_widget_set_halign(focus_label, GTK_ALIGN_START);
@@ -206,10 +249,6 @@ show_timer_settings_window(AppState *state)
   gtk_widget_add_css_class(focus_spin, "setting-spin");
   gtk_widget_set_halign(focus_spin, GTK_ALIGN_END);
 
-  gtk_box_append(GTK_BOX(focus_row), focus_label);
-  gtk_box_append(GTK_BOX(focus_row), focus_spin);
-
-  GtkWidget *short_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *short_label = gtk_label_new("Short break");
   gtk_widget_add_css_class(short_label, "setting-label");
   gtk_widget_set_halign(short_label, GTK_ALIGN_START);
@@ -219,10 +258,6 @@ show_timer_settings_window(AppState *state)
   gtk_widget_add_css_class(short_spin, "setting-spin");
   gtk_widget_set_halign(short_spin, GTK_ALIGN_END);
 
-  gtk_box_append(GTK_BOX(short_row), short_label);
-  gtk_box_append(GTK_BOX(short_row), short_spin);
-
-  GtkWidget *long_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *long_label = gtk_label_new("Long break");
   gtk_widget_add_css_class(long_label, "setting-label");
   gtk_widget_set_halign(long_label, GTK_ALIGN_START);
@@ -232,10 +267,6 @@ show_timer_settings_window(AppState *state)
   gtk_widget_add_css_class(long_spin, "setting-spin");
   gtk_widget_set_halign(long_spin, GTK_ALIGN_END);
 
-  gtk_box_append(GTK_BOX(long_row), long_label);
-  gtk_box_append(GTK_BOX(long_row), long_spin);
-
-  GtkWidget *interval_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *interval_label = gtk_label_new("Long break every (sessions)");
   gtk_widget_add_css_class(interval_label, "setting-label");
   gtk_widget_set_halign(interval_label, GTK_ALIGN_START);
@@ -245,10 +276,36 @@ show_timer_settings_window(AppState *state)
   gtk_widget_add_css_class(interval_spin, "setting-spin");
   gtk_widget_set_halign(interval_spin, GTK_ALIGN_END);
 
-  gtk_box_append(GTK_BOX(interval_row), interval_label);
-  gtk_box_append(GTK_BOX(interval_row), interval_spin);
+  gtk_grid_attach(GTK_GRID(timer_grid), focus_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), focus_spin, 1, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), short_label, 0, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), short_spin, 1, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), long_label, 0, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), long_spin, 1, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), interval_label, 0, 3, 1, 1);
+  gtk_grid_attach(GTK_GRID(timer_grid), interval_spin, 1, 3, 1, 1);
 
-  GtkWidget *tray_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_box_append(GTK_BOX(timer_card), timer_title);
+  gtk_box_append(GTK_BOX(timer_card), timer_desc);
+  gtk_box_append(GTK_BOX(timer_card), timer_grid);
+
+  GtkWidget *behavior_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(behavior_card, "card");
+
+  GtkWidget *behavior_title = gtk_label_new("Window behavior");
+  gtk_widget_add_css_class(behavior_title, "card-title");
+  gtk_widget_set_halign(behavior_title, GTK_ALIGN_START);
+
+  GtkWidget *behavior_desc =
+      gtk_label_new("Control how the app behaves when the window is closed.");
+  gtk_widget_add_css_class(behavior_desc, "task-meta");
+  gtk_widget_set_halign(behavior_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(behavior_desc), TRUE);
+
+  GtkWidget *behavior_grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(behavior_grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(behavior_grid), 16);
+
   GtkWidget *tray_label = gtk_label_new("Close to tray");
   gtk_widget_add_css_class(tray_label, "setting-label");
   gtk_widget_set_halign(tray_label, GTK_ALIGN_START);
@@ -256,16 +313,60 @@ show_timer_settings_window(AppState *state)
   GtkWidget *tray_check = gtk_check_button_new();
   gtk_widget_set_halign(tray_check, GTK_ALIGN_END);
 
-  gtk_box_append(GTK_BOX(tray_row), tray_label);
-  gtk_box_append(GTK_BOX(tray_row), tray_check);
+  gtk_grid_attach(GTK_GRID(behavior_grid), tray_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(behavior_grid), tray_check, 1, 0, 1, 1);
 
-  gtk_box_append(GTK_BOX(root), title);
-  gtk_box_append(GTK_BOX(root), desc);
-  gtk_box_append(GTK_BOX(root), focus_row);
-  gtk_box_append(GTK_BOX(root), short_row);
-  gtk_box_append(GTK_BOX(root), long_row);
-  gtk_box_append(GTK_BOX(root), interval_row);
-  gtk_box_append(GTK_BOX(root), tray_row);
+  gtk_box_append(GTK_BOX(behavior_card), behavior_title);
+  gtk_box_append(GTK_BOX(behavior_card), behavior_desc);
+  gtk_box_append(GTK_BOX(behavior_card), behavior_grid);
+
+  gtk_box_append(GTK_BOX(timer_page), timer_card);
+  gtk_box_append(GTK_BOX(timer_page), behavior_card);
+
+  GtkWidget *timer_scroller = gtk_scrolled_window_new();
+  gtk_widget_add_css_class(timer_scroller, "settings-scroller");
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(timer_scroller),
+                                 GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_vexpand(timer_scroller, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(timer_scroller), timer_page);
+
+  GtkWidget *focus_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  gtk_widget_add_css_class(focus_page, "settings-page");
+  gtk_widget_set_margin_top(focus_page, 4);
+  gtk_widget_set_margin_bottom(focus_page, 8);
+  gtk_widget_set_margin_start(focus_page, 2);
+  gtk_widget_set_margin_end(focus_page, 2);
+
+  GtkWidget *focus_scroller = gtk_scrolled_window_new();
+  gtk_widget_add_css_class(focus_scroller, "settings-scroller");
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(focus_scroller),
+                                 GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_vexpand(focus_scroller, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(focus_scroller), focus_page);
+
+  gboolean ollama_available = state->focus_guard != NULL &&
+                              focus_guard_is_ollama_available(state->focus_guard);
+  GtkWidget *chrome_page = NULL;
+  GtkWidget *chrome_scroller = NULL;
+  if (ollama_available) {
+    chrome_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    gtk_widget_add_css_class(chrome_page, "settings-page");
+    gtk_widget_set_margin_top(chrome_page, 4);
+    gtk_widget_set_margin_bottom(chrome_page, 8);
+    gtk_widget_set_margin_start(chrome_page, 2);
+    gtk_widget_set_margin_end(chrome_page, 2);
+
+    chrome_scroller = gtk_scrolled_window_new();
+    gtk_widget_add_css_class(chrome_scroller, "settings-scroller");
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(chrome_scroller),
+                                   GTK_POLICY_NEVER,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_vexpand(chrome_scroller, TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(chrome_scroller),
+                                  chrome_page);
+  }
 
   TimerSettingsDialog *dialog = g_new0(TimerSettingsDialog, 1);
   dialog->state = state;
@@ -297,7 +398,13 @@ show_timer_settings_window(AppState *state)
                    G_CALLBACK(on_close_to_tray_toggled),
                    dialog);
 
-  focus_guard_settings_append(dialog, root);
+  focus_guard_settings_append(dialog, focus_page, chrome_page);
+
+  gtk_stack_add_titled(GTK_STACK(stack), timer_scroller, "timer", "Timer");
+  gtk_stack_add_titled(GTK_STACK(stack), focus_scroller, "focus", "Focus guard");
+  if (chrome_scroller != NULL && dialog->focus_guard_ollama_section != NULL) {
+    gtk_stack_add_titled(GTK_STACK(stack), chrome_scroller, "chrome", "Chrome");
+  }
 
   gtk_window_set_child(GTK_WINDOW(window), root);
   state->timer_settings_window = GTK_WINDOW(window);

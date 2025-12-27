@@ -34,6 +34,8 @@ typedef struct {
   gboolean suppress_signals;
 } TimerSettingsDialog;
 
-void focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root);
+void focus_guard_settings_append(TimerSettingsDialog *dialog,
+                                 GtkWidget *focus_root,
+                                 GtkWidget *chrome_root);
 void focus_guard_settings_update_controls(TimerSettingsDialog *dialog);
 void focus_guard_start_active_monitor(TimerSettingsDialog *dialog);

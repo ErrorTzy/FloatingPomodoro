@@ -768,13 +768,16 @@ on_focus_guard_remove_clicked(GtkButton *button, gpointer user_data)
 }
 
 void
-focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
+focus_guard_settings_append(TimerSettingsDialog *dialog,
+                            GtkWidget *focus_root,
+                            GtkWidget *chrome_root)
 {
-  if (dialog == NULL || root == NULL) {
+  if (dialog == NULL || focus_root == NULL) {
     return;
   }
 
-  GtkWidget *divider = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  GtkWidget *guard_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(guard_card, "card");
 
   GtkWidget *guard_title = gtk_label_new("Focus guard");
   gtk_widget_add_css_class(guard_title, "card-title");
@@ -786,7 +789,10 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_widget_set_halign(guard_desc, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(guard_desc), TRUE);
 
-  GtkWidget *guard_global_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  GtkWidget *guard_grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(guard_grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(guard_grid), 16);
+
   GtkWidget *guard_global_label = gtk_label_new("Global app usage stats");
   gtk_widget_add_css_class(guard_global_label, "setting-label");
   gtk_widget_set_halign(guard_global_label, GTK_ALIGN_START);
@@ -795,20 +801,14 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_widget_set_halign(guard_global_check, GTK_ALIGN_END);
   gtk_widget_set_tooltip_text(guard_global_check,
                               "Track app usage continuously while the app runs.");
-  gtk_box_append(GTK_BOX(guard_global_row), guard_global_label);
-  gtk_box_append(GTK_BOX(guard_global_row), guard_global_check);
 
-  GtkWidget *guard_warning_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *guard_warning_label = gtk_label_new("Warnings");
   gtk_widget_add_css_class(guard_warning_label, "setting-label");
   gtk_widget_set_halign(guard_warning_label, GTK_ALIGN_START);
   gtk_widget_set_hexpand(guard_warning_label, TRUE);
   GtkWidget *guard_warning_check = gtk_check_button_new();
   gtk_widget_set_halign(guard_warning_check, GTK_ALIGN_END);
-  gtk_box_append(GTK_BOX(guard_warning_row), guard_warning_label);
-  gtk_box_append(GTK_BOX(guard_warning_row), guard_warning_check);
 
-  GtkWidget *guard_interval_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   GtkWidget *guard_interval_label = gtk_label_new("Check interval (sec)");
   gtk_widget_add_css_class(guard_interval_label, "setting-label");
   gtk_widget_set_halign(guard_interval_label, GTK_ALIGN_START);
@@ -817,8 +817,30 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(guard_interval_spin), TRUE);
   gtk_widget_add_css_class(guard_interval_spin, "setting-spin");
   gtk_widget_set_halign(guard_interval_spin, GTK_ALIGN_END);
-  gtk_box_append(GTK_BOX(guard_interval_row), guard_interval_label);
-  gtk_box_append(GTK_BOX(guard_interval_row), guard_interval_spin);
+
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_global_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_global_check, 1, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_warning_label, 0, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_warning_check, 1, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_interval_label, 0, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(guard_grid), guard_interval_spin, 1, 2, 1, 1);
+
+  gtk_box_append(GTK_BOX(guard_card), guard_title);
+  gtk_box_append(GTK_BOX(guard_card), guard_desc);
+  gtk_box_append(GTK_BOX(guard_card), guard_grid);
+
+  GtkWidget *blacklist_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(blacklist_card, "card");
+
+  GtkWidget *blacklist_title = gtk_label_new("Blacklisted apps");
+  gtk_widget_add_css_class(blacklist_title, "card-title");
+  gtk_widget_set_halign(blacklist_title, GTK_ALIGN_START);
+
+  GtkWidget *blacklist_desc = gtk_label_new(
+      "Add distractions here to get warned during focus sessions.");
+  gtk_widget_add_css_class(blacklist_desc, "task-meta");
+  gtk_widget_set_halign(blacklist_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(blacklist_desc), TRUE);
 
   GtkWidget *guard_entry_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_hexpand(guard_entry_row, TRUE);
@@ -871,7 +893,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
                                  GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_min_content_height(
       GTK_SCROLLED_WINDOW(guard_scroller),
-      120);
+      140);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(guard_scroller), guard_list);
 
   GtkWidget *guard_empty_label = gtk_label_new("No blacklisted apps yet.");
@@ -879,12 +901,20 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_widget_set_halign(guard_empty_label, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(guard_empty_label), TRUE);
 
+  gtk_box_append(GTK_BOX(blacklist_card), blacklist_title);
+  gtk_box_append(GTK_BOX(blacklist_card), blacklist_desc);
+  gtk_box_append(GTK_BOX(blacklist_card), guard_entry_row);
+  gtk_box_append(GTK_BOX(blacklist_card), guard_active_row);
+  gtk_box_append(GTK_BOX(blacklist_card), guard_scroller);
+  gtk_box_append(GTK_BOX(blacklist_card), guard_empty_label);
+
+  gtk_box_append(GTK_BOX(focus_root), guard_card);
+  gtk_box_append(GTK_BOX(focus_root), blacklist_card);
+
   gboolean ollama_available = dialog->state != NULL &&
                               dialog->state->focus_guard != NULL &&
                               focus_guard_is_ollama_available(dialog->state->focus_guard);
 
-  GtkWidget *chrome_section = NULL;
-  GtkWidget *chrome_divider = NULL;
   GtkCheckButton *chrome_check = NULL;
   GtkSpinButton *chrome_port_spin = NULL;
   GtkDropDown *ollama_dropdown = NULL;
@@ -892,12 +922,13 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   GtkWidget *ollama_status_label = NULL;
   GtkWidget *trafilatura_status_label = NULL;
 
-  if (ollama_available) {
-    chrome_divider = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  dialog->focus_guard_ollama_section = NULL;
 
-    chrome_section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  if (ollama_available && chrome_root != NULL) {
+    GtkWidget *chrome_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+    gtk_widget_add_css_class(chrome_card, "card");
 
-    GtkWidget *chrome_title = gtk_label_new("Chrome relevance (Ollama)");
+    GtkWidget *chrome_title = gtk_label_new("Chrome relevance");
     gtk_widget_add_css_class(chrome_title, "card-title");
     gtk_widget_set_halign(chrome_title, GTK_ALIGN_START);
 
@@ -907,17 +938,17 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
     gtk_widget_set_halign(chrome_desc, GTK_ALIGN_START);
     gtk_label_set_wrap(GTK_LABEL(chrome_desc), TRUE);
 
-    GtkWidget *chrome_enable_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *chrome_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(chrome_grid), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(chrome_grid), 16);
+
     GtkWidget *chrome_enable_label = gtk_label_new("Enable relevance check");
     gtk_widget_add_css_class(chrome_enable_label, "setting-label");
     gtk_widget_set_halign(chrome_enable_label, GTK_ALIGN_START);
     gtk_widget_set_hexpand(chrome_enable_label, TRUE);
     GtkWidget *chrome_enable_check = gtk_check_button_new();
     gtk_widget_set_halign(chrome_enable_check, GTK_ALIGN_END);
-    gtk_box_append(GTK_BOX(chrome_enable_row), chrome_enable_label);
-    gtk_box_append(GTK_BOX(chrome_enable_row), chrome_enable_check);
 
-    GtkWidget *model_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     GtkWidget *model_label = gtk_label_new("Ollama model");
     gtk_widget_add_css_class(model_label, "setting-label");
     gtk_widget_set_halign(model_label, GTK_ALIGN_START);
@@ -935,11 +966,11 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
     gtk_button_set_child(GTK_BUTTON(model_refresh), refresh_icon);
     gtk_widget_set_tooltip_text(model_refresh, "Refresh models");
 
-    gtk_box_append(GTK_BOX(model_row), model_label);
-    gtk_box_append(GTK_BOX(model_row), model_dropdown);
-    gtk_box_append(GTK_BOX(model_row), model_refresh);
+    GtkWidget *model_controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_hexpand(model_controls, TRUE);
+    gtk_box_append(GTK_BOX(model_controls), model_dropdown);
+    gtk_box_append(GTK_BOX(model_controls), model_refresh);
 
-    GtkWidget *port_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     GtkWidget *port_label = gtk_label_new("Chrome debug port");
     gtk_widget_add_css_class(port_label, "setting-label");
     gtk_widget_set_halign(port_label, GTK_ALIGN_START);
@@ -948,8 +979,13 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
     gtk_widget_add_css_class(port_spin, "setting-spin");
     gtk_widget_set_halign(port_spin, GTK_ALIGN_END);
     gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(port_spin), TRUE);
-    gtk_box_append(GTK_BOX(port_row), port_label);
-    gtk_box_append(GTK_BOX(port_row), port_spin);
+
+    gtk_grid_attach(GTK_GRID(chrome_grid), chrome_enable_label, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), chrome_enable_check, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), model_label, 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), model_controls, 1, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), port_label, 0, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), port_spin, 1, 2, 1, 1);
 
     GtkWidget *chrome_hint = gtk_label_new(
         "Chrome must be started with --remote-debugging-port to enable page checks.");
@@ -983,14 +1019,13 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
     gtk_label_set_wrap(GTK_LABEL(status_label), TRUE);
     gtk_widget_set_visible(status_label, FALSE);
 
-    gtk_box_append(GTK_BOX(chrome_section), chrome_title);
-    gtk_box_append(GTK_BOX(chrome_section), chrome_desc);
-    gtk_box_append(GTK_BOX(chrome_section), chrome_enable_row);
-    gtk_box_append(GTK_BOX(chrome_section), model_row);
-    gtk_box_append(GTK_BOX(chrome_section), port_row);
-    gtk_box_append(GTK_BOX(chrome_section), chrome_hint);
-    gtk_box_append(GTK_BOX(chrome_section), trafilatura_label);
-    gtk_box_append(GTK_BOX(chrome_section), status_label);
+    gtk_box_append(GTK_BOX(chrome_card), chrome_title);
+    gtk_box_append(GTK_BOX(chrome_card), chrome_desc);
+    gtk_box_append(GTK_BOX(chrome_card), chrome_grid);
+    gtk_box_append(GTK_BOX(chrome_card), chrome_hint);
+    gtk_box_append(GTK_BOX(chrome_card), trafilatura_label);
+    gtk_box_append(GTK_BOX(chrome_card), status_label);
+    gtk_box_append(GTK_BOX(chrome_root), chrome_card);
 
     chrome_check = GTK_CHECK_BUTTON(chrome_enable_check);
     chrome_port_spin = GTK_SPIN_BUTTON(port_spin);
@@ -998,15 +1033,10 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
     ollama_refresh_button = GTK_BUTTON(model_refresh);
     ollama_status_label = status_label;
     trafilatura_status_label = trafilatura_label;
+    dialog->focus_guard_ollama_section = chrome_root;
     g_set_object(&dialog->focus_guard_ollama_models, model_list);
     g_object_unref(model_list);
   }
-
-  GtkWidget *hint =
-      gtk_label_new("Changes apply immediately and can be adjusted anytime.");
-  gtk_widget_add_css_class(hint, "task-meta");
-  gtk_widget_set_halign(hint, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
 
   dialog->focus_guard_global_check = GTK_CHECK_BUTTON(guard_global_check);
   dialog->focus_guard_warnings_check = GTK_CHECK_BUTTON(guard_warning_check);
@@ -1021,7 +1051,6 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   dialog->focus_guard_ollama_refresh_button = ollama_refresh_button;
   dialog->focus_guard_ollama_status_label = ollama_status_label;
   dialog->focus_guard_trafilatura_status_label = trafilatura_status_label;
-  dialog->focus_guard_ollama_section = chrome_section;
 
   g_signal_connect(guard_interval_spin,
                    "value-changed",
@@ -1073,25 +1102,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
                      dialog);
   }
 
-  gtk_box_append(GTK_BOX(root), divider);
-  gtk_box_append(GTK_BOX(root), guard_title);
-  gtk_box_append(GTK_BOX(root), guard_desc);
-  gtk_box_append(GTK_BOX(root), guard_global_row);
-  gtk_box_append(GTK_BOX(root), guard_warning_row);
-  gtk_box_append(GTK_BOX(root), guard_interval_row);
-  gtk_box_append(GTK_BOX(root), guard_entry_row);
-  gtk_box_append(GTK_BOX(root), guard_active_row);
-  gtk_box_append(GTK_BOX(root), guard_scroller);
-  gtk_box_append(GTK_BOX(root), guard_empty_label);
-  if (chrome_divider != NULL) {
-    gtk_box_append(GTK_BOX(root), chrome_divider);
-  }
-  if (chrome_section != NULL) {
-    gtk_box_append(GTK_BOX(root), chrome_section);
-  }
-  gtk_box_append(GTK_BOX(root), hint);
-
-  if (ollama_available) {
+  if (ollama_available && dialog->focus_guard_ollama_section != NULL) {
     focus_guard_refresh_models(dialog);
   }
 }

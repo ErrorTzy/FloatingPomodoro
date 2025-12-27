@@ -44,6 +44,56 @@ window.app-window {
   margin-bottom: 8px;
 }
 
+label.settings-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+label.settings-subtitle {
+  font-size: 13px;
+  color: @pomodoro_text_muted;
+}
+
+stack-switcher.settings-switcher {
+  background-color: @pomodoro_surface_alt;
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid @pomodoro_border;
+}
+
+stack-switcher.settings-switcher button {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+  color: @pomodoro_text_muted;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+}
+
+stack-switcher.settings-switcher button:hover {
+  background-color: rgba(15, 76, 92, 0.08);
+  color: @pomodoro_primary;
+}
+
+stack-switcher.settings-switcher button:checked {
+  background-color: @pomodoro_surface;
+  color: @pomodoro_primary;
+  box-shadow: 0 8px 16px -16px @pomodoro_shadow;
+}
+
+scrolledwindow.settings-scroller {
+  background-color: transparent;
+  border: none;
+}
+
+scrolledwindow.settings-scroller > viewport {
+  background-color: transparent;
+}
+
 label.app-title {
   font-size: 28px;
   font-weight: 700;
