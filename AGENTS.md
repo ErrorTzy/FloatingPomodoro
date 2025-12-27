@@ -84,16 +84,20 @@ Constraints:
 - Active window change → blacklist check → warning overlay + stats update
 - Chrome active → CDP query → Ollama relevance → warning overlay
 
-## 5) Project Structure (proposed)
+## 5) Project Structure (current)
 
 ```
 .
+├─ AGENTS.md
+├─ README.md
 ├─ data/
-│  ├─ icons/
 │  ├─ desktop/
+│  ├─ fonts/
+│  ├─ icons/
+│  │  ├─ hicolor/scalable/apps/
+│  │  └─ scalable/actions/
 │  └─ styles/
-├─ docs/
-│  └─ DEV_PLAN.md
+├─ debian -> packaging/debian
 ├─ src/
 │  ├─ app/
 │  ├─ core/
@@ -106,11 +110,14 @@ Constraints:
 ├─ packaging/
 │  └─ debian/
 ├─ tests/
+├─ build/
 └─ meson.build
 ```
 
 Notes:
-- The exact structure may change after initial scaffolding, but separation between core, UI, overlay, tray, and focus guard is required.
+- `debian/` is a symlink to `packaging/debian` for `dpkg-buildpackage`.
+- `build/` is local build output; Debian builds use `obj-*/` directories.
+- Separation between core, UI, overlay, tray, and focus guard remains required.
 - Keep platform‑specific X11 code isolated in `focus/` or `utils/x11/`.
 - Current structure includes `src/app/` (app init + state) and `src/ui/` (main window, dialogs, task list) with `src/main.c` acting as a thin entry point.
 
@@ -234,11 +241,13 @@ Each PR includes motivation, implementation instructions, and testable standards
 **Testable standard:** Blacklisted app triggers repeated warnings; stats update; disabling warnings stops them.
 
 ### PR 8 — Chrome + Ollama relevance checks
+**Status:** Complete (2025-12-27)
 **Motivation:** Intelligent off‑task detection.  
 **Instructions:** This functionality is optional: detect if ollama is avaible on the current machine (detect on app start-up). If yes, show a switch in settings to disable/enable chrome/ollama integration. Disabled by default. The user should be able to select their model from the result returned from `ollama list`. An icon to refresh model list. Can only be enabled when the user selected a model. This functionality works only when we detect Chrome is active; configurable Chrome Debugging Port, default 9222. get active tab and page content from debugging port (You may need to do investigation and research in this step. Introduction of external library is allowed); send to Ollama and check relevance to the task name; design ollama system prompt with few-shots example. Ollama sends back: directly relevant, not sure or clearly irrelevant. Warning like blacklist if clearly irrelevant to task.  
 **Testable standard:** Works when Chrome debug port is enabled and ollama is availble; correctly get active tab name and page content. (may need external library to get more readible content). menu option not displayed when ollama is not available; menu disabled when model not selected; model list refreshable. Correctly use debugging port to get tab and page content, and turn them to more readible format. Mock test with qwen3:30b-a3b-thinking-2507-q4_K_M on the local machine and with mock task. Open chrome tabs. to see if connection is right, page content is right, and llm can correctly check if the page is relevant  
 
 ### PR 9 — Packaging (.deb)
+**Status:** Complete (2025-12-27).  
 **Motivation:** Installable via apt on this machine.  
 **Instructions:** Debian packaging metadata; desktop entry; icons; fonts; dependencies.  
 **Testable standard:** `dpkg -i` installs and runs cleanly; menu entry exists; uninstall works.

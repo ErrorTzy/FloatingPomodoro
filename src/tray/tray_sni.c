@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-static const char *tray_icon_name = "alarm-symbolic";
+static const char *tray_icon_name = "xfce4-floating-pomodoro";
 
 static const char sni_introspection_xml[] =
     "<node>"

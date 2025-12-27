@@ -1,0 +1,5 @@
+xfce4-floating-pomodoro (0.1.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging.
+
+ -- Scott <scott@localhost>  Sat, 27 Dec 2025 12:00:00 +0000
