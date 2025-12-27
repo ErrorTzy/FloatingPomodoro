@@ -223,6 +223,7 @@ Each PR includes motivation, implementation instructions, and testable standards
 **Testable standard:** Tray icon appears in XFCE panel; actions are functional; no crashes on panel restart.
 
 ### PR 7 — Focus Guard v1 (blacklist + stats)
+**Status:** Complete (2025-12-27)
 **Motivation:** Reduce distraction and track app usage.  
 **Instructions:** Active window tracking every 1 second; blacklist warnings (if floating ball is displayed, the floating ball turns red and shows warning; If not, pop up the flaoting ball first.); collect stats per active app; configurable black list application and detection interval (default 1 second).  
 **Testable standard:** Blacklisted app triggers repeated warnings; stats update; disabling warnings stops them.
