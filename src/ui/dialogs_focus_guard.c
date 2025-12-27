@@ -3,7 +3,13 @@
 #include "config.h"
 #include "focus/focus_guard.h"
 #include "focus/focus_guard_x11.h"
+#include "focus/ollama_client.h"
+#include "focus/trafilatura_client.h"
 #include "storage/settings_storage.h"
+
+typedef struct {
+  GWeakRef window_ref;
+} FocusGuardOllamaRefreshContext;
 
 static void on_focus_guard_interval_changed(GtkSpinButton *spin,
                                             gpointer user_data);
@@ -11,6 +17,16 @@ static void on_focus_guard_global_toggled(GtkCheckButton *button,
                                           gpointer user_data);
 static void on_focus_guard_warnings_toggled(GtkCheckButton *button,
                                             gpointer user_data);
+static void focus_guard_apply_settings(TimerSettingsDialog *dialog);
+static void on_focus_guard_chrome_toggled(GtkCheckButton *button,
+                                          gpointer user_data);
+static void on_focus_guard_chrome_port_changed(GtkSpinButton *spin,
+                                               gpointer user_data);
+static void on_focus_guard_model_changed(GObject *object,
+                                         GParamSpec *pspec,
+                                         gpointer user_data);
+static void on_focus_guard_ollama_refresh_clicked(GtkButton *button,
+                                                  gpointer user_data);
 static void on_focus_guard_add_clicked(GtkButton *button, gpointer user_data);
 static void on_focus_guard_entry_activate(GtkEntry *entry, gpointer user_data);
 static void on_focus_guard_remove_clicked(GtkButton *button,
@@ -188,6 +204,284 @@ focus_guard_collect_blacklist(TimerSettingsDialog *dialog)
 }
 
 static void
+focus_guard_set_ollama_status(TimerSettingsDialog *dialog, const char *text)
+{
+  if (dialog == NULL || dialog->focus_guard_ollama_status_label == NULL) {
+    return;
+  }
+
+  gtk_label_set_text(GTK_LABEL(dialog->focus_guard_ollama_status_label),
+                     text != NULL ? text : "");
+  gtk_widget_set_visible(dialog->focus_guard_ollama_status_label,
+                         text != NULL && *text != '\0');
+}
+
+static char *
+focus_guard_get_selected_model(TimerSettingsDialog *dialog)
+{
+  if (dialog == NULL || dialog->focus_guard_ollama_models == NULL ||
+      dialog->focus_guard_ollama_dropdown == NULL) {
+    return NULL;
+  }
+
+  guint selected = gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
+  g_message("focus_guard_get_selected_model: dialog=%p dropdown=%p models=%p "
+            "selected=%u",
+            (void *)dialog,
+            (void *)dialog->focus_guard_ollama_dropdown,
+            (void *)dialog->focus_guard_ollama_models,
+            selected);
+  if (selected == GTK_INVALID_LIST_POSITION) {
+    return NULL;
+  }
+
+  const char *value =
+      gtk_string_list_get_string(dialog->focus_guard_ollama_models, selected);
+  if (value == NULL || *value == '\0') {
+    return NULL;
+  }
+
+  return g_strdup(value);
+}
+
+static void
+focus_guard_update_ollama_toggle(TimerSettingsDialog *dialog)
+{
+  if (dialog == NULL || dialog->focus_guard_chrome_check == NULL) {
+    return;
+  }
+
+  gboolean has_model = FALSE;
+  if (dialog->focus_guard_ollama_models != NULL &&
+      dialog->focus_guard_ollama_dropdown != NULL) {
+    guint selected =
+        gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
+    has_model = selected != GTK_INVALID_LIST_POSITION;
+  }
+
+  gtk_widget_set_sensitive(GTK_WIDGET(dialog->focus_guard_chrome_check), has_model);
+
+  if (!has_model) {
+    gtk_check_button_set_active(dialog->focus_guard_chrome_check, FALSE);
+  }
+}
+
+static void
+focus_guard_apply_model_selection(TimerSettingsDialog *dialog,
+                                  const FocusGuardConfig *config)
+{
+  if (dialog == NULL || dialog->focus_guard_ollama_dropdown == NULL ||
+      dialog->focus_guard_ollama_models == NULL) {
+    return;
+  }
+
+  guint selected = GTK_INVALID_LIST_POSITION;
+  if (config != NULL && config->ollama_model != NULL) {
+    guint count = g_list_model_get_n_items(G_LIST_MODEL(dialog->focus_guard_ollama_models));
+    for (guint i = 0; i < count; i++) {
+      const char *item =
+          gtk_string_list_get_string(dialog->focus_guard_ollama_models, i);
+      if (item != NULL && g_strcmp0(item, config->ollama_model) == 0) {
+        selected = i;
+        break;
+      }
+    }
+  }
+
+  gtk_drop_down_set_selected(dialog->focus_guard_ollama_dropdown, selected);
+  focus_guard_update_ollama_toggle(dialog);
+}
+
+static void
+focus_guard_apply_models_to_dropdown(TimerSettingsDialog *dialog,
+                                     GPtrArray *models)
+{
+  if (dialog == NULL || dialog->focus_guard_ollama_dropdown == NULL) {
+    return;
+  }
+
+  GListModel *current_model =
+      gtk_drop_down_get_model(dialog->focus_guard_ollama_dropdown);
+  guint current_selected =
+      gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
+  g_message("focus_guard_apply_models_to_dropdown: dialog=%p dropdown=%p "
+            "current_model=%p current_selected=%u dialog_model=%p list_ptr=%p "
+            "new_count=%u",
+            (void *)dialog,
+            (void *)dialog->focus_guard_ollama_dropdown,
+            (void *)current_model,
+            current_selected,
+            (void *)dialog->focus_guard_ollama_models,
+            (void *)dialog->focus_guard_ollama_models,
+            models != NULL ? models->len : 0);
+
+  gboolean prev_suppress = dialog->suppress_signals;
+  dialog->suppress_signals = TRUE;
+
+  GtkStringList *list = dialog->focus_guard_ollama_models;
+  if (list == NULL) {
+    list = gtk_string_list_new(NULL);
+    g_set_object(&dialog->focus_guard_ollama_models, list);
+    gtk_drop_down_set_model(dialog->focus_guard_ollama_dropdown, G_LIST_MODEL(list));
+    g_object_unref(list);
+  }
+
+  guint existing = g_list_model_get_n_items(G_LIST_MODEL(list));
+  if (existing > 0) {
+    gtk_string_list_splice(list, 0, existing, NULL);
+  }
+
+  if (models != NULL) {
+    for (guint i = 0; i < models->len; i++) {
+      const char *model = g_ptr_array_index(models, i);
+      if (model != NULL && *model != '\0') {
+        gtk_string_list_append(list, model);
+      }
+    }
+  }
+
+  gtk_drop_down_set_selected(dialog->focus_guard_ollama_dropdown,
+                             GTK_INVALID_LIST_POSITION);
+  dialog->suppress_signals = prev_suppress;
+}
+
+static void
+focus_guard_ollama_refresh_context_free(gpointer data)
+{
+  FocusGuardOllamaRefreshContext *context = data;
+  if (context == NULL) {
+    return;
+  }
+
+  g_weak_ref_clear(&context->window_ref);
+  g_free(context);
+}
+
+static void
+focus_guard_ollama_refresh_task(GTask *task,
+                                gpointer source_object,
+                                gpointer task_data,
+                                GCancellable *cancellable)
+{
+  (void)source_object;
+  (void)cancellable;
+  (void)task_data;
+
+  GError *error = NULL;
+  GPtrArray *models = ollama_client_list_models_sync(&error);
+  if (models == NULL) {
+    g_task_return_error(task, error);
+    return;
+  }
+
+  g_task_return_pointer(task, models, (GDestroyNotify)g_ptr_array_unref);
+}
+
+static void
+focus_guard_ollama_refresh_complete(GObject *source_object,
+                                    GAsyncResult *res,
+                                    gpointer user_data)
+{
+  (void)source_object;
+  FocusGuardOllamaRefreshContext *context = user_data;
+  if (context == NULL) {
+    return;
+  }
+
+  GtkWindow *window = g_weak_ref_get(&context->window_ref);
+  if (window == NULL) {
+    focus_guard_ollama_refresh_context_free(context);
+    return;
+  }
+
+  TimerSettingsDialog *dialog =
+      g_object_get_data(G_OBJECT(window), "timer-settings-dialog");
+  if (dialog == NULL) {
+    g_object_unref(window);
+    focus_guard_ollama_refresh_context_free(context);
+    return;
+  }
+
+  g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
+  if (dialog->focus_guard_ollama_refresh_button != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(dialog->focus_guard_ollama_refresh_button), TRUE);
+  }
+
+  GError *error = NULL;
+  GPtrArray *models = g_task_propagate_pointer(G_TASK(res), &error);
+  g_message("focus_guard_ollama_refresh_complete: window=%p dialog=%p "
+            "models=%p len=%u error=%s",
+            (void *)window,
+            (void *)dialog,
+            (void *)models,
+            models != NULL ? models->len : 0,
+            error != NULL ? error->message : "(none)");
+  if (models == NULL) {
+    focus_guard_set_ollama_status(dialog,
+                                  error != NULL && error->message != NULL
+                                      ? error->message
+                                      : "Unable to load Ollama models.");
+    g_clear_error(&error);
+    focus_guard_apply_models_to_dropdown(dialog, NULL);
+  } else {
+    focus_guard_apply_models_to_dropdown(dialog, models);
+    if (models->len == 0) {
+      focus_guard_set_ollama_status(
+          dialog,
+          "No Ollama models found. Use `ollama pull` to download one.");
+    } else {
+      focus_guard_set_ollama_status(dialog, NULL);
+    }
+    g_ptr_array_unref(models);
+  }
+
+  gboolean prev_suppress = dialog->suppress_signals;
+  dialog->suppress_signals = TRUE;
+  focus_guard_settings_update_controls(dialog);
+  dialog->suppress_signals = prev_suppress;
+  focus_guard_apply_settings(dialog);
+
+  g_object_unref(window);
+  focus_guard_ollama_refresh_context_free(context);
+}
+
+static void
+focus_guard_refresh_models(TimerSettingsDialog *dialog)
+{
+  if (dialog == NULL || dialog->focus_guard_ollama_dropdown == NULL) {
+    return;
+  }
+
+  g_message("focus_guard_refresh_models: dialog=%p dropdown=%p models=%p",
+            (void *)dialog,
+            (void *)dialog->focus_guard_ollama_dropdown,
+            (void *)dialog->focus_guard_ollama_models);
+
+  if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
+    g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
+    g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
+  }
+
+  if (dialog->focus_guard_ollama_refresh_button != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(dialog->focus_guard_ollama_refresh_button), FALSE);
+  }
+  focus_guard_set_ollama_status(dialog, "Refreshing Ollama models...");
+
+  dialog->focus_guard_ollama_refresh_cancellable = g_cancellable_new();
+
+  FocusGuardOllamaRefreshContext *context =
+      g_new0(FocusGuardOllamaRefreshContext, 1);
+  g_weak_ref_init(&context->window_ref, G_OBJECT(dialog->window));
+
+  GTask *task = g_task_new(NULL,
+                           dialog->focus_guard_ollama_refresh_cancellable,
+                           focus_guard_ollama_refresh_complete,
+                           context);
+  g_task_run_in_thread(task, focus_guard_ollama_refresh_task);
+  g_object_unref(task);
+}
+
+static void
 focus_guard_apply_settings(TimerSettingsDialog *dialog)
 {
   if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL ||
@@ -210,6 +504,23 @@ focus_guard_apply_settings(TimerSettingsDialog *dialog)
   if (dialog->focus_guard_warnings_check != NULL) {
     config.warnings_enabled =
         gtk_check_button_get_active(dialog->focus_guard_warnings_check);
+  }
+
+  if (dialog->focus_guard_chrome_port_spin != NULL) {
+    config.chrome_debug_port =
+        (guint)gtk_spin_button_get_value_as_int(dialog->focus_guard_chrome_port_spin);
+  }
+
+  if (dialog->focus_guard_chrome_check != NULL) {
+    config.chrome_ollama_enabled =
+        gtk_check_button_get_active(dialog->focus_guard_chrome_check);
+  }
+
+  g_free(config.ollama_model);
+  config.ollama_model = focus_guard_get_selected_model(dialog);
+
+  if (config.ollama_model == NULL || *config.ollama_model == '\0') {
+    config.chrome_ollama_enabled = FALSE;
   }
 
   g_strfreev(config.blacklist);
@@ -308,6 +619,22 @@ focus_guard_settings_update_controls(TimerSettingsDialog *dialog)
                                 config.warnings_enabled);
   }
 
+  if (dialog->focus_guard_chrome_port_spin != NULL) {
+    gtk_spin_button_set_value(dialog->focus_guard_chrome_port_spin,
+                              (gdouble)config.chrome_debug_port);
+  }
+
+  if (dialog->focus_guard_ollama_dropdown != NULL) {
+    focus_guard_apply_model_selection(dialog, &config);
+  }
+
+  if (dialog->focus_guard_chrome_check != NULL) {
+    gtk_check_button_set_active(dialog->focus_guard_chrome_check,
+                                config.chrome_ollama_enabled);
+  }
+
+  focus_guard_update_ollama_toggle(dialog);
+
   if (dialog->focus_guard_list != NULL) {
     focus_guard_clear_list(dialog->focus_guard_list);
     if (config.blacklist != NULL) {
@@ -316,6 +643,12 @@ focus_guard_settings_update_controls(TimerSettingsDialog *dialog)
       }
     }
     focus_guard_update_empty_label(dialog);
+  }
+
+  if (dialog->focus_guard_ollama_dropdown != NULL &&
+      dialog->focus_guard_ollama_models == NULL &&
+      dialog->focus_guard_ollama_refresh_cancellable == NULL) {
+    focus_guard_refresh_models(dialog);
   }
 
   focus_guard_config_clear(&config);
@@ -340,6 +673,58 @@ on_focus_guard_warnings_toggled(GtkCheckButton *button, gpointer user_data)
 {
   (void)button;
   focus_guard_apply_settings((TimerSettingsDialog *)user_data);
+}
+
+static void
+on_focus_guard_chrome_toggled(GtkCheckButton *button, gpointer user_data)
+{
+  (void)button;
+  focus_guard_apply_settings((TimerSettingsDialog *)user_data);
+}
+
+static void
+on_focus_guard_chrome_port_changed(GtkSpinButton *spin, gpointer user_data)
+{
+  (void)spin;
+  focus_guard_apply_settings((TimerSettingsDialog *)user_data);
+}
+
+static void
+on_focus_guard_model_changed(GObject *object,
+                             GParamSpec *pspec,
+                             gpointer user_data)
+{
+  (void)object;
+  (void)pspec;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL) {
+    return;
+  }
+
+  guint selected = GTK_INVALID_LIST_POSITION;
+  if (dialog->focus_guard_ollama_dropdown != NULL) {
+    selected = gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
+  }
+  g_message("on_focus_guard_model_changed: dialog=%p dropdown=%p models=%p "
+            "selected=%u suppress=%d",
+            (void *)dialog,
+            (void *)dialog->focus_guard_ollama_dropdown,
+            (void *)dialog->focus_guard_ollama_models,
+            selected,
+            dialog->suppress_signals);
+  if (dialog->suppress_signals) {
+    return;
+  }
+
+  focus_guard_update_ollama_toggle(dialog);
+  focus_guard_apply_settings(dialog);
+}
+
+static void
+on_focus_guard_ollama_refresh_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  focus_guard_refresh_models((TimerSettingsDialog *)user_data);
 }
 
 static void
@@ -537,6 +922,129 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_widget_set_halign(guard_empty_label, GTK_ALIGN_START);
   gtk_label_set_wrap(GTK_LABEL(guard_empty_label), TRUE);
 
+  gboolean ollama_available = dialog->state != NULL &&
+                              dialog->state->focus_guard != NULL &&
+                              focus_guard_is_ollama_available(dialog->state->focus_guard);
+
+  GtkWidget *chrome_section = NULL;
+  GtkWidget *chrome_divider = NULL;
+  GtkCheckButton *chrome_check = NULL;
+  GtkSpinButton *chrome_port_spin = NULL;
+  GtkDropDown *ollama_dropdown = NULL;
+  GtkButton *ollama_refresh_button = NULL;
+  GtkWidget *ollama_status_label = NULL;
+  GtkWidget *trafilatura_status_label = NULL;
+
+  if (ollama_available) {
+    chrome_divider = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+
+    chrome_section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+
+    GtkWidget *chrome_title = gtk_label_new("Chrome relevance (Ollama)");
+    gtk_widget_add_css_class(chrome_title, "card-title");
+    gtk_widget_set_halign(chrome_title, GTK_ALIGN_START);
+
+    GtkWidget *chrome_desc = gtk_label_new(
+        "When Chrome is active during a focus session, check if the page matches the current task.");
+    gtk_widget_add_css_class(chrome_desc, "task-meta");
+    gtk_widget_set_halign(chrome_desc, GTK_ALIGN_START);
+    gtk_label_set_wrap(GTK_LABEL(chrome_desc), TRUE);
+
+    GtkWidget *chrome_enable_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *chrome_enable_label = gtk_label_new("Enable relevance check");
+    gtk_widget_add_css_class(chrome_enable_label, "setting-label");
+    gtk_widget_set_halign(chrome_enable_label, GTK_ALIGN_START);
+    gtk_widget_set_hexpand(chrome_enable_label, TRUE);
+    GtkWidget *chrome_enable_check = gtk_check_button_new();
+    gtk_widget_set_halign(chrome_enable_check, GTK_ALIGN_END);
+    gtk_box_append(GTK_BOX(chrome_enable_row), chrome_enable_label);
+    gtk_box_append(GTK_BOX(chrome_enable_row), chrome_enable_check);
+
+    GtkWidget *model_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *model_label = gtk_label_new("Ollama model");
+    gtk_widget_add_css_class(model_label, "setting-label");
+    gtk_widget_set_halign(model_label, GTK_ALIGN_START);
+    gtk_widget_set_hexpand(model_label, TRUE);
+
+    GtkStringList *model_list = gtk_string_list_new(NULL);
+    GtkWidget *model_dropdown = gtk_drop_down_new(G_LIST_MODEL(model_list), NULL);
+    gtk_widget_add_css_class(model_dropdown, "setting-dropdown");
+    gtk_widget_set_hexpand(model_dropdown, TRUE);
+
+    GtkWidget *model_refresh = gtk_button_new();
+    gtk_widget_add_css_class(model_refresh, "icon-button");
+    GtkWidget *refresh_icon = gtk_image_new_from_icon_name("view-refresh-symbolic");
+    gtk_image_set_pixel_size(GTK_IMAGE(refresh_icon), 18);
+    gtk_button_set_child(GTK_BUTTON(model_refresh), refresh_icon);
+    gtk_widget_set_tooltip_text(model_refresh, "Refresh models");
+
+    gtk_box_append(GTK_BOX(model_row), model_label);
+    gtk_box_append(GTK_BOX(model_row), model_dropdown);
+    gtk_box_append(GTK_BOX(model_row), model_refresh);
+
+    GtkWidget *port_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *port_label = gtk_label_new("Chrome debug port");
+    gtk_widget_add_css_class(port_label, "setting-label");
+    gtk_widget_set_halign(port_label, GTK_ALIGN_START);
+    gtk_widget_set_hexpand(port_label, TRUE);
+    GtkWidget *port_spin = gtk_spin_button_new_with_range(1, 65535, 1);
+    gtk_widget_add_css_class(port_spin, "setting-spin");
+    gtk_widget_set_halign(port_spin, GTK_ALIGN_END);
+    gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(port_spin), TRUE);
+    gtk_box_append(GTK_BOX(port_row), port_label);
+    gtk_box_append(GTK_BOX(port_row), port_spin);
+
+    GtkWidget *chrome_hint = gtk_label_new(
+        "Chrome must be started with --remote-debugging-port to enable page checks.");
+    gtk_widget_add_css_class(chrome_hint, "task-meta");
+    gtk_widget_set_halign(chrome_hint, GTK_ALIGN_START);
+    gtk_label_set_wrap(GTK_LABEL(chrome_hint), TRUE);
+
+    const char *trafilatura_text = NULL;
+    TrafilaturaStatus trafilatura_status = trafilatura_client_get_status();
+    switch (trafilatura_status) {
+      case TRAFILATURA_STATUS_AVAILABLE:
+        trafilatura_text = "Trafilatura enabled";
+        break;
+      case TRAFILATURA_STATUS_NO_PYTHON:
+        trafilatura_text = "Trafilatura not available: python not found";
+        break;
+      case TRAFILATURA_STATUS_NO_MODULE:
+      default:
+        trafilatura_text = "Trafilatura not available: trafilatura not found";
+        break;
+    }
+
+    GtkWidget *trafilatura_label = gtk_label_new(trafilatura_text);
+    gtk_widget_add_css_class(trafilatura_label, "task-meta");
+    gtk_widget_set_halign(trafilatura_label, GTK_ALIGN_START);
+    gtk_label_set_wrap(GTK_LABEL(trafilatura_label), TRUE);
+
+    GtkWidget *status_label = gtk_label_new("");
+    gtk_widget_add_css_class(status_label, "task-meta");
+    gtk_widget_set_halign(status_label, GTK_ALIGN_START);
+    gtk_label_set_wrap(GTK_LABEL(status_label), TRUE);
+    gtk_widget_set_visible(status_label, FALSE);
+
+    gtk_box_append(GTK_BOX(chrome_section), chrome_title);
+    gtk_box_append(GTK_BOX(chrome_section), chrome_desc);
+    gtk_box_append(GTK_BOX(chrome_section), chrome_enable_row);
+    gtk_box_append(GTK_BOX(chrome_section), model_row);
+    gtk_box_append(GTK_BOX(chrome_section), port_row);
+    gtk_box_append(GTK_BOX(chrome_section), chrome_hint);
+    gtk_box_append(GTK_BOX(chrome_section), trafilatura_label);
+    gtk_box_append(GTK_BOX(chrome_section), status_label);
+
+    chrome_check = GTK_CHECK_BUTTON(chrome_enable_check);
+    chrome_port_spin = GTK_SPIN_BUTTON(port_spin);
+    ollama_dropdown = GTK_DROP_DOWN(model_dropdown);
+    ollama_refresh_button = GTK_BUTTON(model_refresh);
+    ollama_status_label = status_label;
+    trafilatura_status_label = trafilatura_label;
+    g_set_object(&dialog->focus_guard_ollama_models, model_list);
+    g_object_unref(model_list);
+  }
+
   GtkWidget *hint =
       gtk_label_new("Changes apply immediately and can be adjusted anytime.");
   gtk_widget_add_css_class(hint, "task-meta");
@@ -550,6 +1058,13 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   dialog->focus_guard_empty_label = guard_empty_label;
   dialog->focus_guard_entry = guard_entry;
   dialog->focus_guard_active_label = guard_active_label;
+  dialog->focus_guard_chrome_check = chrome_check;
+  dialog->focus_guard_chrome_port_spin = chrome_port_spin;
+  dialog->focus_guard_ollama_dropdown = ollama_dropdown;
+  dialog->focus_guard_ollama_refresh_button = ollama_refresh_button;
+  dialog->focus_guard_ollama_status_label = ollama_status_label;
+  dialog->focus_guard_trafilatura_status_label = trafilatura_status_label;
+  dialog->focus_guard_ollama_section = chrome_section;
 
   g_signal_connect(guard_interval_spin,
                    "value-changed",
@@ -576,6 +1091,31 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
                    G_CALLBACK(on_focus_guard_use_active_clicked),
                    dialog);
 
+  if (chrome_check != NULL) {
+    g_signal_connect(chrome_check,
+                     "toggled",
+                     G_CALLBACK(on_focus_guard_chrome_toggled),
+                     dialog);
+  }
+  if (chrome_port_spin != NULL) {
+    g_signal_connect(chrome_port_spin,
+                     "value-changed",
+                     G_CALLBACK(on_focus_guard_chrome_port_changed),
+                     dialog);
+  }
+  if (ollama_dropdown != NULL) {
+    g_signal_connect(ollama_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_focus_guard_model_changed),
+                     dialog);
+  }
+  if (ollama_refresh_button != NULL) {
+    g_signal_connect(ollama_refresh_button,
+                     "clicked",
+                     G_CALLBACK(on_focus_guard_ollama_refresh_clicked),
+                     dialog);
+  }
+
   gtk_box_append(GTK_BOX(root), divider);
   gtk_box_append(GTK_BOX(root), guard_title);
   gtk_box_append(GTK_BOX(root), guard_desc);
@@ -586,5 +1126,15 @@ focus_guard_settings_append(TimerSettingsDialog *dialog, GtkWidget *root)
   gtk_box_append(GTK_BOX(root), guard_active_row);
   gtk_box_append(GTK_BOX(root), guard_scroller);
   gtk_box_append(GTK_BOX(root), guard_empty_label);
+  if (chrome_divider != NULL) {
+    gtk_box_append(GTK_BOX(root), chrome_divider);
+  }
+  if (chrome_section != NULL) {
+    gtk_box_append(GTK_BOX(root), chrome_section);
+  }
   gtk_box_append(GTK_BOX(root), hint);
+
+  if (ollama_available) {
+    focus_guard_refresh_models(dialog);
+  }
 }

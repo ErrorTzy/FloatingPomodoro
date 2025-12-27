@@ -14,10 +14,22 @@ timer_settings_dialog_free(gpointer data)
     return;
   }
 
+  g_message("timer_settings_dialog_free: dialog=%p window=%p dropdown=%p models=%p",
+            (void *)dialog,
+            (void *)dialog->window,
+            (void *)dialog->focus_guard_ollama_dropdown,
+            (void *)dialog->focus_guard_ollama_models);
+
   if (dialog->focus_guard_active_source != 0) {
     g_source_remove(dialog->focus_guard_active_source);
     dialog->focus_guard_active_source = 0;
   }
+
+  if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
+    g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
+    g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
+  }
+  g_clear_object(&dialog->focus_guard_ollama_models);
 
   g_free(dialog->focus_guard_last_external);
   g_free(dialog);

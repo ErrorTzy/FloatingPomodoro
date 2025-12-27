@@ -4,9 +4,12 @@ app_sources = files(
   'app/app_state.c',
   'core/pomodoro_timer.c',
   'core/task_store.c',
+  'focus/chrome_cdp_client.c',
   'focus/focus_guard.c',
   'focus/focus_guard_config.c',
   'focus/focus_guard_x11.c',
+  'focus/ollama_client.c',
+  'focus/trafilatura_client.c',
   'overlay/overlay_window.c',
   'overlay/overlay_window_actions.c',
   'overlay/overlay_window_draw.c',
@@ -28,10 +31,21 @@ app_sources = files(
   'utils/x11.c',
 ) + resources
 
+app_deps = [
+  gtk4_dep,
+  fontconfig_dep,
+  x11_dep,
+  sqlite3_dep,
+]
+
+if libsoup_dep.found() and json_glib_dep.found()
+  app_deps += [libsoup_dep, json_glib_dep]
+endif
+
 executable(
   'xfce4-floating-pomodoro',
   app_sources,
-  dependencies: [gtk4_dep, fontconfig_dep, x11_dep, sqlite3_dep],
+  dependencies: app_deps,
   include_directories: include_directories('..', '.'),
   install: true
 )

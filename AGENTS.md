@@ -230,8 +230,8 @@ Each PR includes motivation, implementation instructions, and testable standards
 
 ### PR 8 — Chrome + Ollama relevance checks
 **Motivation:** Intelligent off‑task detection.  
-**Instructions:** Detect Chrome active; Chrome Debugging Port 9222 read active tab and page content; Ollama relevance check; model dropdown from `ollama list` with auto‑refresh; warning like blacklist if clearly irrelevant to task.  
-**Testable standard:** Works when Chrome debug port is enabled; shows clear message when it’s not; model list refreshes.
+**Instructions:** This functionality is optional: detect if ollama is avaible on the current machine (detect on app start-up). If yes, show a switch in settings to disable/enable chrome/ollama integration. Disabled by default. The user should be able to select their model from the result returned from `ollama list`. An icon to refresh model list. Can only be enabled when the user selected a model. This functionality works only when we detect Chrome is active; configurable Chrome Debugging Port, default 9222. get active tab and page content from debugging port (You may need to do investigation and research in this step. Introduction of external library is allowed); send to Ollama and check relevance to the task name; design ollama system prompt with few-shots example. Ollama sends back: directly relevant, not sure or clearly irrelevant. Warning like blacklist if clearly irrelevant to task.  
+**Testable standard:** Works when Chrome debug port is enabled and ollama is availble; correctly get active tab name and page content. (may need external library to get more readible content). menu option not displayed when ollama is not available; menu disabled when model not selected; model list refreshable. Correctly use debugging port to get tab and page content, and turn them to more readible format. Mock test with qwen3:30b-a3b-thinking-2507-q4_K_M on the local machine and with mock task. Open chrome tabs. to see if connection is right, page content is right, and llm can correctly check if the page is relevant  
 
 ### PR 9 — Packaging (.deb)
 **Motivation:** Installable via apt on this machine.  

@@ -54,6 +54,9 @@ focus_guard_config_default(void)
   config.warnings_enabled = TRUE;
   config.detection_interval_seconds = 1;
   config.blacklist = g_new0(char *, 1);
+  config.chrome_ollama_enabled = FALSE;
+  config.chrome_debug_port = 9222;
+  config.ollama_model = NULL;
   return config;
 }
 
@@ -66,6 +69,18 @@ focus_guard_config_normalize(FocusGuardConfig *config)
 
   if (config->detection_interval_seconds < 1) {
     config->detection_interval_seconds = 1;
+  }
+
+  if (config->chrome_debug_port < 1 || config->chrome_debug_port > 65535) {
+    config->chrome_debug_port = 9222;
+  }
+
+  if (config->ollama_model != NULL) {
+    char *trimmed = g_strstrip(config->ollama_model);
+    if (*trimmed == '\0') {
+      g_free(config->ollama_model);
+      config->ollama_model = NULL;
+    }
   }
 
   focus_guard_config_normalize_blacklist(config);
@@ -82,8 +97,12 @@ focus_guard_config_copy(const FocusGuardConfig *config)
   copy.warnings_enabled = config->warnings_enabled;
   copy.global_stats_enabled = config->global_stats_enabled;
   copy.detection_interval_seconds = config->detection_interval_seconds;
+  copy.chrome_ollama_enabled = config->chrome_ollama_enabled;
+  copy.chrome_debug_port = config->chrome_debug_port;
   g_strfreev(copy.blacklist);
   copy.blacklist = config->blacklist ? g_strdupv(config->blacklist) : g_new0(char *, 1);
+  g_free(copy.ollama_model);
+  copy.ollama_model = config->ollama_model ? g_strdup(config->ollama_model) : NULL;
   focus_guard_config_normalize(&copy);
   return copy;
 }
@@ -97,4 +116,5 @@ focus_guard_config_clear(FocusGuardConfig *config)
 
   g_strfreev(config->blacklist);
   config->blacklist = NULL;
+  g_clear_pointer(&config->ollama_model, g_free);
 }

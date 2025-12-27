@@ -229,6 +229,36 @@ settings_storage_load_focus_guard(FocusGuardConfig *config, GError **error)
     }
   }
 
+  if (g_key_file_has_key(key_file, "focus_guard", "chrome_ollama_enabled", NULL)) {
+    config->chrome_ollama_enabled =
+        g_key_file_get_boolean(key_file,
+                               "focus_guard",
+                               "chrome_ollama_enabled",
+                               NULL);
+  }
+
+  if (g_key_file_has_key(key_file, "focus_guard", "chrome_debug_port", NULL)) {
+    gint value = g_key_file_get_integer(key_file,
+                                        "focus_guard",
+                                        "chrome_debug_port",
+                                        NULL);
+    if (value > 0) {
+      config->chrome_debug_port = (guint)value;
+    }
+  }
+
+  if (g_key_file_has_key(key_file, "focus_guard", "ollama_model", NULL)) {
+    gchar *value = g_key_file_get_string(key_file,
+                                         "focus_guard",
+                                         "ollama_model",
+                                         NULL);
+    if (value != NULL) {
+      g_free(config->ollama_model);
+      config->ollama_model = g_strdup(value);
+      g_free(value);
+    }
+  }
+
   if (g_key_file_has_key(key_file, "focus_guard", "blacklist", NULL)) {
     gsize length = 0;
     gchar **list = g_key_file_get_string_list(key_file,
@@ -290,6 +320,20 @@ settings_storage_save_focus_guard(const FocusGuardConfig *config,
                          "focus_guard",
                          "interval_seconds",
                          (gint)normalized.detection_interval_seconds);
+  g_key_file_set_boolean(key_file,
+                         "focus_guard",
+                         "chrome_ollama_enabled",
+                         normalized.chrome_ollama_enabled);
+  g_key_file_set_integer(key_file,
+                         "focus_guard",
+                         "chrome_debug_port",
+                         (gint)normalized.chrome_debug_port);
+  g_key_file_set_string(key_file,
+                        "focus_guard",
+                        "ollama_model",
+                        normalized.ollama_model != NULL
+                            ? normalized.ollama_model
+                            : "");
 
   if (normalized.blacklist != NULL) {
     gsize length = g_strv_length(normalized.blacklist);

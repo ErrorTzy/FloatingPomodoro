@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gtk/gtk.h>
+#include <gio/gio.h>
 
 #include "app/app_state.h"
 
@@ -15,6 +16,15 @@ typedef struct {
   GtkCheckButton *focus_guard_global_check;
   GtkCheckButton *focus_guard_warnings_check;
   GtkSpinButton *focus_guard_interval_spin;
+  GtkCheckButton *focus_guard_chrome_check;
+  GtkSpinButton *focus_guard_chrome_port_spin;
+  GtkDropDown *focus_guard_ollama_dropdown;
+  GtkButton *focus_guard_ollama_refresh_button;
+  GtkWidget *focus_guard_ollama_status_label;
+  GtkWidget *focus_guard_trafilatura_status_label;
+  GtkWidget *focus_guard_ollama_section;
+  GtkStringList *focus_guard_ollama_models;
+  GCancellable *focus_guard_ollama_refresh_cancellable;
   GtkWidget *focus_guard_list;
   GtkWidget *focus_guard_empty_label;
   GtkWidget *focus_guard_entry;

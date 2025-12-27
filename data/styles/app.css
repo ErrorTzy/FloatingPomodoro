@@ -508,6 +508,13 @@ dropdown.archive-dropdown {
   padding: 6px;
 }
 
+dropdown.setting-dropdown {
+  background-color: @pomodoro_surface;
+  border-radius: 12px;
+  border: 1px solid @pomodoro_border;
+  padding: 6px 10px;
+}
+
 window.overlay-window {
   background-color: transparent;
 }

@@ -7,6 +7,9 @@ typedef struct {
   gboolean warnings_enabled;
   guint detection_interval_seconds;
   char **blacklist;
+  gboolean chrome_ollama_enabled;
+  guint chrome_debug_port;
+  char *ollama_model;
 } FocusGuardConfig;
 
 FocusGuardConfig focus_guard_config_default(void);
