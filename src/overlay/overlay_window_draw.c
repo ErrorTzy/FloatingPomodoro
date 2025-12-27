@@ -32,10 +32,13 @@ overlay_window_draw(GtkDrawingArea *area,
   GdkRGBA ring_break = {0.89, 0.39, 0.08, 0.95};
   GdkRGBA ring_long_break = {0.24, 0.51, 0.38, 0.95};
   GdkRGBA ring_paused = {0.36, 0.36, 0.36, 0.65};
-  GdkRGBA ring_warning = {0.84, 0.15, 0.24, 0.95};
+  GdkRGBA ring_warning = {0.98, 0.12, 0.18, 1.0};
 
   if (overlay->warning_active) {
-    ring_track = (GdkRGBA){0.84, 0.15, 0.24, 0.22};
+    ring_width = MAX(7.0, radius * 0.15);
+    base_start = (GdkRGBA){1.00, 0.84, 0.86, 0.96};
+    base_end = (GdkRGBA){0.96, 0.52, 0.56, 0.96};
+    ring_track = (GdkRGBA){0.95, 0.18, 0.24, 0.38};
   }
 
   cairo_save(cr);
@@ -65,6 +68,21 @@ overlay_window_draw(GtkDrawingArea *area,
   cairo_paint(cr);
   cairo_pattern_destroy(gradient);
   cairo_restore(cr);
+
+  if (overlay->warning_active) {
+    cairo_save(cr);
+    cairo_arc(cr, cx, cy, radius, 0, 2 * G_PI);
+    cairo_clip(cr);
+    cairo_set_source_rgba(cr, 0.88, 0.12, 0.18, 0.18);
+    cairo_paint(cr);
+    cairo_restore(cr);
+
+    GdkRGBA inner_glow = {1.0, 0.32, 0.36, 0.55};
+    cairo_set_line_width(cr, ring_width * 0.6);
+    gdk_cairo_set_source_rgba(cr, &inner_glow);
+    cairo_arc(cr, cx, cy, radius - ring_width * 1.2, 0, 2 * G_PI);
+    cairo_stroke(cr);
+  }
 
   cairo_set_line_width(cr, ring_width);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);

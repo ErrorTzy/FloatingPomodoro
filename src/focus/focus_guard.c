@@ -747,9 +747,7 @@ focus_guard_trigger_warning(FocusGuard *guard, const char *app_name)
     overlay_window_set_visible(guard->state, TRUE);
   }
 
-  char *message = g_strdup_printf("Blocked: %s", app_name);
-  overlay_window_set_warning(guard->state, TRUE, message);
-  g_free(message);
+  overlay_window_set_warning(guard->state, TRUE, app_name);
 }
 
 static gboolean

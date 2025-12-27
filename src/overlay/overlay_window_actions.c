@@ -4,6 +4,8 @@
 
 #include "core/pomodoro_timer.h"
 
+#include <cairo.h>
+
 static gboolean
 overlay_window_pointer_inside_root(OverlayWindow *overlay)
 {
@@ -49,6 +51,74 @@ overlay_window_pointer_inside_root(OverlayWindow *overlay)
   return gtk_widget_contains(overlay->root, local.x, local.y);
 }
 
+static void
+overlay_window_union_widget_region(cairo_region_t *region,
+                                   GtkWidget *widget,
+                                   GtkWidget *window)
+{
+  if (region == NULL || widget == NULL || window == NULL) {
+    return;
+  }
+
+  if (!gtk_widget_get_visible(widget)) {
+    return;
+  }
+
+  int width = gtk_widget_get_width(widget);
+  int height = gtk_widget_get_height(widget);
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  graphene_point_t origin = {0};
+  graphene_point_t window_point = {0};
+  if (!gtk_widget_compute_point(widget, window, &origin, &window_point)) {
+    return;
+  }
+
+  cairo_rectangle_int_t rect = {(int)window_point.x,
+                                (int)window_point.y,
+                                width,
+                                height};
+  cairo_region_union_rectangle(region, &rect);
+}
+
+void
+overlay_window_update_input_region(OverlayWindow *overlay)
+{
+  if (overlay == NULL || overlay->window == NULL) {
+    return;
+  }
+
+  GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(overlay->window));
+  if (surface == NULL) {
+    return;
+  }
+
+  cairo_region_t *region = cairo_region_create();
+
+  overlay_window_union_widget_region(region,
+                                     overlay->bubble_frame != NULL
+                                         ? overlay->bubble_frame
+                                         : overlay->bubble,
+                                     GTK_WIDGET(overlay->window));
+
+  if (overlay->info_revealer != NULL) {
+    gboolean reveal =
+        gtk_revealer_get_reveal_child(GTK_REVEALER(overlay->info_revealer));
+    if (reveal || gtk_widget_get_visible(overlay->info_revealer)) {
+      overlay_window_union_widget_region(region,
+                                         overlay->info_revealer,
+                                         GTK_WIDGET(overlay->window));
+    }
+  }
+
+  if (!cairo_region_is_empty(region)) {
+    gdk_surface_set_input_region(surface, region);
+  }
+  cairo_region_destroy(region);
+}
+
 void
 overlay_window_set_info_revealed(OverlayWindow *overlay,
                                  gboolean reveal,
@@ -62,6 +132,8 @@ overlay_window_set_info_revealed(OverlayWindow *overlay,
       GTK_REVEALER(overlay->info_revealer),
       animate ? OVERLAY_INFO_REVEAL_DURATION_MS : 0);
   gtk_revealer_set_reveal_child(GTK_REVEALER(overlay->info_revealer), reveal);
+
+  overlay_window_update_input_region(overlay);
 }
 
 void

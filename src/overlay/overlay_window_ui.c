@@ -1,5 +1,166 @@
 #include "overlay/overlay_window_internal.h"
 
+#define OVERLAY_BUBBLE_SIZE 128
+#define OVERLAY_WINDOW_MARGIN 6
+#define OVERLAY_WARNING_HALO_PADDING 32
+#define OVERLAY_WARNING_APP_WIDTH_RATIO 0.6
+#define OVERLAY_WARNING_FOCUS_WIDTH_RATIO 0.7
+
+static void
+overlay_window_update_warning_app_width(OverlayWindow *overlay, int bubble_width)
+{
+  if (overlay == NULL || overlay->warning_app_label == NULL) {
+    return;
+  }
+
+  if (bubble_width <= 0) {
+    bubble_width = OVERLAY_BUBBLE_SIZE;
+  }
+
+  int max_width = (int)((double)bubble_width * OVERLAY_WARNING_APP_WIDTH_RATIO + 0.5);
+  if (max_width < 12) {
+    max_width = 12;
+  }
+
+  PangoContext *context =
+      gtk_widget_get_pango_context(overlay->warning_app_label);
+  if (context == NULL) {
+    gtk_label_set_max_width_chars(GTK_LABEL(overlay->warning_app_label), 10);
+    return;
+  }
+
+  PangoFontMetrics *metrics =
+      pango_context_get_metrics(context,
+                                pango_context_get_font_description(context),
+                                pango_context_get_language(context));
+  int char_width = 0;
+  if (metrics != NULL) {
+    char_width = pango_font_metrics_get_approximate_char_width(metrics) /
+                 PANGO_SCALE;
+    pango_font_metrics_unref(metrics);
+  }
+
+  if (char_width <= 0) {
+    gtk_label_set_max_width_chars(GTK_LABEL(overlay->warning_app_label), 10);
+    return;
+  }
+
+  int max_chars = max_width / char_width;
+  if (max_chars < 1) {
+    max_chars = 1;
+  }
+
+  gtk_label_set_max_width_chars(GTK_LABEL(overlay->warning_app_label), max_chars);
+}
+
+static void
+overlay_window_update_warning_focus_size(OverlayWindow *overlay, int bubble_width)
+{
+  if (overlay == NULL || overlay->warning_focus_label == NULL) {
+    return;
+  }
+
+  if (bubble_width <= 0) {
+    bubble_width = OVERLAY_BUBBLE_SIZE;
+  }
+
+  int target_width =
+      (int)((double)bubble_width * OVERLAY_WARNING_FOCUS_WIDTH_RATIO + 0.5);
+  if (target_width < 1) {
+    return;
+  }
+
+  PangoContext *context =
+      gtk_widget_get_pango_context(overlay->warning_focus_label);
+  if (context == NULL) {
+    return;
+  }
+
+  const char *text = gtk_label_get_text(GTK_LABEL(overlay->warning_focus_label));
+  if (text == NULL || *text == '\0') {
+    text = "FOCUS!";
+  }
+
+  PangoFontDescription *desc =
+      pango_font_description_copy(pango_context_get_font_description(context));
+  if (desc == NULL) {
+    return;
+  }
+
+  int base_size = pango_font_description_get_size(desc);
+  if (base_size <= 0) {
+    base_size = 12 * PANGO_SCALE;
+    pango_font_description_set_size(desc, base_size);
+  }
+
+  PangoLayout *layout = pango_layout_new(context);
+  pango_layout_set_text(layout, text, -1);
+  pango_layout_set_font_description(layout, desc);
+
+  int base_width = 0;
+  pango_layout_get_pixel_size(layout, &base_width, NULL);
+  g_object_unref(layout);
+  pango_font_description_free(desc);
+
+  if (base_width <= 0) {
+    return;
+  }
+
+  double scale = (double)target_width / (double)base_width;
+  if (scale < 1.0) {
+    gtk_label_set_attributes(GTK_LABEL(overlay->warning_focus_label), NULL);
+    return;
+  }
+
+  int new_size = (int)(base_size * scale);
+  int max_size = 48 * PANGO_SCALE;
+  if (new_size > max_size) {
+    new_size = max_size;
+  }
+
+  PangoAttrList *attrs = pango_attr_list_new();
+  PangoAttribute *size_attr = pango_attr_size_new(new_size);
+  size_attr->start_index = 0;
+  size_attr->end_index = G_MAXUINT;
+  pango_attr_list_insert(attrs, size_attr);
+  gtk_label_set_attributes(GTK_LABEL(overlay->warning_focus_label), attrs);
+  pango_attr_list_unref(attrs);
+}
+
+static void
+overlay_window_on_bubble_size_allocate(GtkWidget *widget,
+                                       int width,
+                                       int height,
+                                       int baseline,
+                                       gpointer user_data)
+{
+  (void)widget;
+  (void)baseline;
+  OverlayWindow *overlay = user_data;
+  if (overlay == NULL) {
+    return;
+  }
+
+  int bubble_size = width < height ? width : height;
+  overlay_window_update_warning_app_width(overlay, bubble_size);
+  overlay_window_update_warning_focus_size(overlay, bubble_size);
+  overlay_window_update_input_region(overlay);
+}
+
+static void
+overlay_window_on_root_size_allocate(GtkWidget *widget,
+                                     int width,
+                                     int height,
+                                     int baseline,
+                                     gpointer user_data)
+{
+  (void)widget;
+  (void)width;
+  (void)height;
+  (void)baseline;
+  overlay_window_update_input_region(user_data);
+}
+
 static GtkWidget *
 overlay_window_create_menu_icon_button(const char *icon_name,
                                        const char *label,
@@ -56,7 +217,9 @@ overlay_window_create_window(GtkApplication *app)
   gtk_window_set_title(GTK_WINDOW(window), "Pomodoro Overlay");
   gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
   gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
-  gtk_window_set_default_size(GTK_WINDOW(window), 140, 140);
+  int window_size = OVERLAY_BUBBLE_SIZE + (OVERLAY_WINDOW_MARGIN * 2) +
+                    (OVERLAY_WARNING_HALO_PADDING * 2);
+  gtk_window_set_default_size(GTK_WINDOW(window), window_size, window_size);
   gtk_window_set_focus_visible(GTK_WINDOW(window), FALSE);
   gtk_window_set_deletable(GTK_WINDOW(window), FALSE);
   gtk_widget_add_css_class(window, "overlay-window");
@@ -72,18 +235,20 @@ overlay_window_build_ui(OverlayWindow *overlay)
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
   gtk_widget_add_css_class(root, "overlay-root");
-  gtk_widget_set_margin_top(root, 6);
-  gtk_widget_set_margin_bottom(root, 6);
-  gtk_widget_set_margin_start(root, 6);
-  gtk_widget_set_margin_end(root, 6);
+  gtk_widget_set_margin_top(root, OVERLAY_WINDOW_MARGIN);
+  gtk_widget_set_margin_bottom(root, OVERLAY_WINDOW_MARGIN);
+  gtk_widget_set_margin_start(root, OVERLAY_WINDOW_MARGIN);
+  gtk_widget_set_margin_end(root, OVERLAY_WINDOW_MARGIN);
   overlay->root = root;
   overlay_window_set_opacity(overlay, overlay->opacity);
 
   GtkWidget *bubble = gtk_overlay_new();
   gtk_widget_add_css_class(bubble, "overlay-bubble");
-  gtk_widget_set_size_request(bubble, 128, 128);
+  gtk_widget_set_size_request(bubble, OVERLAY_BUBBLE_SIZE, OVERLAY_BUBBLE_SIZE);
   gtk_widget_set_hexpand(bubble, TRUE);
   gtk_widget_set_vexpand(bubble, TRUE);
+  gtk_widget_set_overflow(bubble, GTK_OVERFLOW_VISIBLE);
+  overlay->bubble = bubble;
 
   GtkWidget *bubble_frame =
       gtk_aspect_frame_new(0.5f, 0.0f, 1.0f, FALSE);
@@ -91,13 +256,20 @@ overlay_window_build_ui(OverlayWindow *overlay)
   gtk_widget_set_valign(bubble_frame, GTK_ALIGN_START);
   gtk_widget_set_hexpand(bubble_frame, TRUE);
   gtk_widget_set_vexpand(bubble_frame, FALSE);
+  gtk_widget_set_margin_top(bubble_frame, OVERLAY_WARNING_HALO_PADDING);
+  gtk_widget_set_margin_bottom(bubble_frame, OVERLAY_WARNING_HALO_PADDING);
+  gtk_widget_set_margin_start(bubble_frame, OVERLAY_WARNING_HALO_PADDING);
+  gtk_widget_set_margin_end(bubble_frame, OVERLAY_WARNING_HALO_PADDING);
   gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(bubble_frame), bubble);
+  overlay->bubble_frame = bubble_frame;
 
   GtkWidget *drawing = gtk_drawing_area_new();
   gtk_widget_set_hexpand(drawing, TRUE);
   gtk_widget_set_vexpand(drawing, TRUE);
-  gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(drawing), 128);
-  gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(drawing), 128);
+  gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(drawing),
+                                     OVERLAY_BUBBLE_SIZE);
+  gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(drawing),
+                                      OVERLAY_BUBBLE_SIZE);
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing),
                                  overlay_window_draw,
                                  overlay,
@@ -120,16 +292,42 @@ overlay_window_build_ui(OverlayWindow *overlay)
   gtk_widget_set_halign(phase_label, GTK_ALIGN_CENTER);
   overlay->phase_label = phase_label;
 
-  GtkWidget *warning_label = gtk_label_new("");
-  gtk_widget_add_css_class(warning_label, "overlay-warning-label");
-  gtk_widget_set_halign(warning_label, GTK_ALIGN_CENTER);
-  gtk_label_set_wrap(GTK_LABEL(warning_label), TRUE);
-  gtk_widget_set_visible(warning_label, FALSE);
-  overlay->warning_label = warning_label;
+  GtkWidget *warning_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
+  gtk_widget_add_css_class(warning_box, "overlay-warning-text");
+  gtk_widget_set_halign(warning_box, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(warning_box, GTK_ALIGN_CENTER);
+  gtk_widget_set_visible(warning_box, FALSE);
+  overlay->warning_box = warning_box;
+
+  GtkWidget *warning_title = gtk_label_new("STAY");
+  gtk_widget_add_css_class(warning_title, "overlay-warning-title");
+  gtk_widget_set_halign(warning_title, GTK_ALIGN_CENTER);
+  gtk_label_set_xalign(GTK_LABEL(warning_title), 0.5f);
+  overlay->warning_title_label = warning_title;
+
+  GtkWidget *warning_focus = gtk_label_new("FOCUS!");
+  gtk_widget_add_css_class(warning_focus, "overlay-warning-focus");
+  gtk_widget_set_halign(warning_focus, GTK_ALIGN_CENTER);
+  gtk_label_set_xalign(GTK_LABEL(warning_focus), 0.5f);
+  gtk_label_set_single_line_mode(GTK_LABEL(warning_focus), TRUE);
+  overlay->warning_focus_label = warning_focus;
+
+  GtkWidget *warning_app = gtk_label_new("");
+  gtk_widget_add_css_class(warning_app, "overlay-warning-app");
+  gtk_widget_set_halign(warning_app, GTK_ALIGN_CENTER);
+  gtk_label_set_xalign(GTK_LABEL(warning_app), 0.5f);
+  gtk_label_set_single_line_mode(GTK_LABEL(warning_app), TRUE);
+  gtk_label_set_ellipsize(GTK_LABEL(warning_app), PANGO_ELLIPSIZE_END);
+  gtk_widget_set_hexpand(warning_app, FALSE);
+  overlay->warning_app_label = warning_app;
+
+  gtk_box_append(GTK_BOX(warning_box), warning_title);
+  gtk_box_append(GTK_BOX(warning_box), warning_focus);
+  gtk_box_append(GTK_BOX(warning_box), warning_app);
 
   gtk_box_append(GTK_BOX(label_box), time_label);
   gtk_box_append(GTK_BOX(label_box), phase_label);
-  gtk_box_append(GTK_BOX(label_box), warning_label);
+  gtk_box_append(GTK_BOX(label_box), warning_box);
   gtk_overlay_add_overlay(GTK_OVERLAY(bubble), label_box);
 
   GtkWidget *revealer = gtk_revealer_new();
@@ -271,6 +469,21 @@ overlay_window_build_ui(OverlayWindow *overlay)
   gtk_box_append(GTK_BOX(root), revealer);
 
   gtk_window_set_child(GTK_WINDOW(overlay->window), root);
+
+  overlay_window_update_warning_app_width(overlay, OVERLAY_BUBBLE_SIZE);
+  overlay_window_update_warning_focus_size(overlay, OVERLAY_BUBBLE_SIZE);
+  g_signal_connect(root,
+                   "size-allocate",
+                   G_CALLBACK(overlay_window_on_root_size_allocate),
+                   overlay);
+  g_signal_connect(bubble,
+                   "size-allocate",
+                   G_CALLBACK(overlay_window_on_bubble_size_allocate),
+                   overlay);
+  g_signal_connect(revealer,
+                   "size-allocate",
+                   G_CALLBACK(overlay_window_on_root_size_allocate),
+                   overlay);
 
   overlay_window_bind_actions(overlay, bubble);
 }

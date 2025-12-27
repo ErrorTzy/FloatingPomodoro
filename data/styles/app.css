@@ -529,16 +529,22 @@ window.overlay-window {
 }
 
 .overlay-root.overlay-warning label.overlay-time {
-  color: @pomodoro_error;
+  color: #ff2a2a;
 }
 
 .overlay-root.overlay-warning label.overlay-phase {
-  color: rgba(215, 38, 61, 0.7);
+  color: rgba(255, 42, 42, 0.75);
 }
 
 .overlay-root.overlay-warning .overlay-bubble {
   border-radius: 999px;
-  animation: overlay-warning-pulse 1.6s ease-in-out infinite;
+  animation: overlay-warning-pulse 1.2s ease-in-out infinite;
+}
+
+.overlay-root.overlay-warning label.overlay-warning-title,
+.overlay-root.overlay-warning label.overlay-warning-focus,
+.overlay-root.overlay-warning label.overlay-warning-app {
+  animation: overlay-warning-text-glow 1s ease-in-out infinite;
 }
 
 .overlay-bubble {
@@ -559,12 +565,32 @@ label.overlay-phase {
   color: @pomodoro_text_muted;
 }
 
-label.overlay-warning-label {
-  font-size: 10px;
+label.overlay-warning-title {
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: @pomodoro_error;
+  color: #fff2f2;
+  text-shadow: 0 0 6px rgba(255, 42, 42, 0.7),
+               0 0 14px rgba(255, 42, 42, 0.45);
+}
+
+label.overlay-warning-focus {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #fff7f7;
+  text-shadow: 0 0 6px rgba(255, 42, 42, 0.8),
+               0 0 18px rgba(255, 42, 42, 0.55);
+}
+
+label.overlay-warning-app {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: rgba(255, 230, 230, 0.9);
+  text-shadow: 0 0 6px rgba(255, 42, 42, 0.4);
 }
 
 .overlay-panel {
@@ -681,15 +707,34 @@ button.overlay-menu-text.overlay-menu-danger:hover {
 
 @keyframes overlay-warning-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(215, 38, 61, 0.08),
-                0 0 12px rgba(215, 38, 61, 0.2);
+    box-shadow: 0 0 0 0 rgba(255, 42, 42, 0.3),
+                0 0 12px rgba(255, 42, 42, 0.55),
+                0 0 24px rgba(255, 42, 42, 0.35);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(215, 38, 61, 0.16),
-                0 0 18px rgba(215, 38, 61, 0.28);
+    box-shadow: 0 0 0 12px rgba(255, 42, 42, 0.45),
+                0 0 20px rgba(255, 42, 42, 0.7),
+                0 0 32px rgba(255, 42, 42, 0.45);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(215, 38, 61, 0.08),
-                0 0 12px rgba(215, 38, 61, 0.2);
+    box-shadow: 0 0 0 0 rgba(255, 42, 42, 0.3),
+                0 0 12px rgba(255, 42, 42, 0.55),
+                0 0 24px rgba(255, 42, 42, 0.35);
+  }
+}
+
+@keyframes overlay-warning-text-glow {
+  0% {
+    text-shadow: 0 0 4px rgba(255, 42, 42, 0.45),
+                 0 0 10px rgba(255, 42, 42, 0.25);
+  }
+  50% {
+    text-shadow: 0 0 8px rgba(255, 42, 42, 0.85),
+                 0 0 18px rgba(255, 42, 42, 0.55),
+                 0 0 28px rgba(255, 42, 42, 0.35);
+  }
+  100% {
+    text-shadow: 0 0 4px rgba(255, 42, 42, 0.45),
+                 0 0 10px rgba(255, 42, 42, 0.25);
   }
 }

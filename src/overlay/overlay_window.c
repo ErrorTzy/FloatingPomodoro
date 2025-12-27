@@ -78,22 +78,42 @@ overlay_window_set_warning(AppState *state, gboolean active, const char *text)
 
   if (active) {
     gtk_widget_add_css_class(overlay->root, "overlay-warning");
-    if (overlay->warning_label != NULL) {
-      const char *message = text != NULL ? text : "Stay focused";
-      gtk_label_set_text(GTK_LABEL(overlay->warning_label), message);
-      gtk_widget_set_visible(overlay->warning_label, TRUE);
+    if (overlay->time_label != NULL) {
+      gtk_widget_set_visible(overlay->time_label, FALSE);
+    }
+    if (overlay->phase_label != NULL) {
+      gtk_widget_set_visible(overlay->phase_label, FALSE);
+    }
+    if (overlay->warning_box != NULL) {
+      gtk_widget_set_visible(overlay->warning_box, TRUE);
+    }
+    if (overlay->warning_app_label != NULL) {
+      const char *app_name = text != NULL ? text : "";
+      gtk_label_set_text(GTK_LABEL(overlay->warning_app_label), app_name);
+      gtk_widget_set_tooltip_text(overlay->warning_app_label, app_name);
     }
   } else {
     gtk_widget_remove_css_class(overlay->root, "overlay-warning");
-    if (overlay->warning_label != NULL) {
-      gtk_label_set_text(GTK_LABEL(overlay->warning_label), "");
-      gtk_widget_set_visible(overlay->warning_label, FALSE);
+    if (overlay->time_label != NULL) {
+      gtk_widget_set_visible(overlay->time_label, TRUE);
+    }
+    if (overlay->phase_label != NULL) {
+      gtk_widget_set_visible(overlay->phase_label, TRUE);
+    }
+    if (overlay->warning_app_label != NULL) {
+      gtk_label_set_text(GTK_LABEL(overlay->warning_app_label), "");
+      gtk_widget_set_tooltip_text(overlay->warning_app_label, "");
+    }
+    if (overlay->warning_box != NULL) {
+      gtk_widget_set_visible(overlay->warning_box, FALSE);
     }
   }
 
   if (overlay->drawing_area != NULL) {
     gtk_widget_queue_draw(overlay->drawing_area);
   }
+
+  overlay_window_update_input_region(overlay);
 }
 
 static char *

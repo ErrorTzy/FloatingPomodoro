@@ -13,10 +13,15 @@ struct _OverlayWindow {
   AppState *state;
   GtkWindow *window;
   GtkWidget *root;
+  GtkWidget *bubble;
+  GtkWidget *bubble_frame;
   GtkWidget *drawing_area;
   GtkWidget *time_label;
   GtkWidget *phase_label;
-  GtkWidget *warning_label;
+  GtkWidget *warning_box;
+  GtkWidget *warning_title_label;
+  GtkWidget *warning_focus_label;
+  GtkWidget *warning_app_label;
   GtkWidget *info_revealer;
   GtkWidget *current_task_label;
   GtkWidget *next_task_label;
@@ -48,6 +53,7 @@ void overlay_window_menu_popdown(OverlayWindow *overlay);
 void overlay_window_set_phase_class(OverlayWindow *overlay);
 void overlay_window_set_opacity(OverlayWindow *overlay, gdouble value);
 void overlay_window_bind_actions(OverlayWindow *overlay, GtkWidget *bubble);
+void overlay_window_update_input_region(OverlayWindow *overlay);
 
 void overlay_window_draw(GtkDrawingArea *area,
                          cairo_t *cr,
