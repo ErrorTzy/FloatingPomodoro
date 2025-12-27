@@ -227,6 +227,24 @@ focus_guard_get_model_list(TimerSettingsDialog *dialog)
   return focus_guard_settings_model_get_ollama_models(dialog->focus_guard_model);
 }
 
+static GtkWidget *
+focus_guard_create_model_dropdown(TimerSettingsDialog *dialog)
+{
+  GtkWidget *dropdown = gtk_drop_down_new(NULL, NULL);
+  if (dialog == NULL) {
+    return dropdown;
+  }
+
+  GtkStringList *list = focus_guard_get_model_list(dialog);
+  if (list != NULL) {
+    gtk_drop_down_set_model(GTK_DROP_DOWN(dropdown), G_LIST_MODEL(list));
+    g_assert(gtk_drop_down_get_model(GTK_DROP_DOWN(dropdown)) ==
+             G_LIST_MODEL(list));
+  }
+
+  return dropdown;
+}
+
 static char *
 focus_guard_get_selected_model(TimerSettingsDialog *dialog)
 {
@@ -989,12 +1007,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
     gtk_widget_set_halign(model_label, GTK_ALIGN_START);
     gtk_widget_set_hexpand(model_label, TRUE);
 
-    GtkStringList *model_list = focus_guard_get_model_list(dialog);
-    GtkWidget *model_dropdown = gtk_drop_down_new(NULL, NULL);
-    if (model_list != NULL) {
-      gtk_drop_down_set_model(GTK_DROP_DOWN(model_dropdown),
-                              G_LIST_MODEL(model_list));
-    }
+    GtkWidget *model_dropdown = focus_guard_create_model_dropdown(dialog);
     gtk_widget_add_css_class(model_dropdown, "setting-dropdown");
     gtk_widget_set_hexpand(model_dropdown, TRUE);
 
