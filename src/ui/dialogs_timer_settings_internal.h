@@ -24,6 +24,7 @@ typedef struct {
   GtkWidget *focus_guard_trafilatura_status_label;
   GtkWidget *focus_guard_ollama_section;
   GtkStringList *focus_guard_ollama_models;
+  gboolean focus_guard_ollama_models_weak_set;
   GCancellable *focus_guard_ollama_refresh_cancellable;
   GtkWidget *focus_guard_list;
   GtkWidget *focus_guard_empty_label;
@@ -39,3 +40,4 @@ void focus_guard_settings_append(TimerSettingsDialog *dialog,
                                  GtkWidget *chrome_root);
 void focus_guard_settings_update_controls(TimerSettingsDialog *dialog);
 void focus_guard_start_active_monitor(TimerSettingsDialog *dialog);
+void focus_guard_clear_model_ref(TimerSettingsDialog *dialog);

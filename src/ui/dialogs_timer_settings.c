@@ -8,6 +8,56 @@
 static void timer_settings_update_controls(TimerSettingsDialog *dialog);
 
 static void
+timer_settings_dialog_teardown(TimerSettingsDialog *dialog)
+{
+  if (dialog == NULL) {
+    return;
+  }
+
+  g_message("timer_settings_dialog_teardown: dialog=%p window=%p state=%p",
+            (void *)dialog,
+            (void *)dialog->window,
+            (void *)dialog->state);
+
+  dialog->suppress_signals = TRUE;
+
+  if (dialog->focus_guard_active_source != 0) {
+    g_message("timer_settings_dialog_teardown: remove active source %u",
+              dialog->focus_guard_active_source);
+    g_source_remove(dialog->focus_guard_active_source);
+    dialog->focus_guard_active_source = 0;
+  }
+
+  if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
+    g_message("timer_settings_dialog_teardown: cancel refresh %p",
+              (void *)dialog->focus_guard_ollama_refresh_cancellable);
+    g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
+    g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
+  }
+
+  if (dialog->focus_guard_ollama_models != NULL) {
+    g_message("timer_settings_dialog_teardown: keep model ref %p",
+              (void *)dialog->focus_guard_ollama_models);
+  }
+
+  g_clear_pointer(&dialog->focus_guard_last_external, g_free);
+
+  dialog->focus_guard_ollama_dropdown = NULL;
+  dialog->focus_guard_ollama_refresh_button = NULL;
+  dialog->focus_guard_ollama_status_label = NULL;
+  dialog->focus_guard_trafilatura_status_label = NULL;
+  dialog->focus_guard_chrome_check = NULL;
+  dialog->focus_guard_chrome_port_spin = NULL;
+  dialog->focus_guard_list = NULL;
+  dialog->focus_guard_empty_label = NULL;
+  dialog->focus_guard_entry = NULL;
+  dialog->focus_guard_active_label = NULL;
+
+  dialog->window = NULL;
+  dialog->state = NULL;
+}
+
+static void
 timer_settings_dialog_free(gpointer data)
 {
   TimerSettingsDialog *dialog = data;
@@ -15,18 +65,8 @@ timer_settings_dialog_free(gpointer data)
     return;
   }
 
-  if (dialog->focus_guard_active_source != 0) {
-    g_source_remove(dialog->focus_guard_active_source);
-    dialog->focus_guard_active_source = 0;
-  }
-
-  if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
-    g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
-    g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
-  }
-  g_clear_object(&dialog->focus_guard_ollama_models);
-
-  g_free(dialog->focus_guard_last_external);
+  focus_guard_clear_model_ref(dialog);
+  timer_settings_dialog_teardown(dialog);
   g_free(dialog);
 }
 
@@ -39,10 +79,14 @@ on_timer_settings_window_destroy(GtkWidget *widget, gpointer user_data)
     return;
   }
 
-  dialog->suppress_signals = TRUE;
+  g_message("on_timer_settings_window_destroy: dialog=%p window=%p",
+            (void *)dialog,
+            (void *)dialog->window);
+  AppState *state = dialog->state;
+  timer_settings_dialog_teardown(dialog);
   g_info("Timer settings window destroyed");
-  if (dialog->state != NULL) {
-    dialog->state->timer_settings_window = NULL;
+  if (state != NULL) {
+    state->timer_settings_window = NULL;
   }
 }
 
@@ -52,6 +96,9 @@ on_timer_settings_window_close(GtkWindow *window, gpointer user_data)
   (void)window;
   TimerSettingsDialog *dialog = user_data;
   if (dialog != NULL) {
+    g_message("on_timer_settings_window_close: dialog=%p window=%p",
+              (void *)dialog,
+              (void *)dialog->window);
     dialog->suppress_signals = TRUE;
     g_info("Timer settings window close requested");
   }
