@@ -14,33 +14,16 @@ timer_settings_dialog_teardown(TimerSettingsDialog *dialog)
     return;
   }
 
-  g_message("timer_settings_dialog_teardown: dialog=%p window=%p state=%p",
-            (void *)dialog,
-            (void *)dialog->window,
-            (void *)dialog->state);
-
   dialog->suppress_signals = TRUE;
 
   if (dialog->focus_guard_active_source != 0) {
-    g_message("timer_settings_dialog_teardown: remove active source %u",
-              dialog->focus_guard_active_source);
     g_source_remove(dialog->focus_guard_active_source);
     dialog->focus_guard_active_source = 0;
   }
 
-  if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
-    g_message("timer_settings_dialog_teardown: cancel refresh %p",
-              (void *)dialog->focus_guard_ollama_refresh_cancellable);
-    g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
-    g_clear_object(&dialog->focus_guard_ollama_refresh_cancellable);
+  if (dialog->focus_guard_model != NULL) {
+    focus_guard_settings_model_cancel_refresh(dialog->focus_guard_model);
   }
-
-  if (dialog->focus_guard_ollama_models != NULL) {
-    g_message("timer_settings_dialog_teardown: keep model ref %p",
-              (void *)dialog->focus_guard_ollama_models);
-  }
-
-  g_clear_pointer(&dialog->focus_guard_last_external, g_free);
 
   dialog->focus_guard_ollama_dropdown = NULL;
   dialog->focus_guard_ollama_refresh_button = NULL;
@@ -65,8 +48,8 @@ timer_settings_dialog_free(gpointer data)
     return;
   }
 
-  focus_guard_clear_model_ref(dialog);
   timer_settings_dialog_teardown(dialog);
+  g_clear_object(&dialog->focus_guard_model);
   g_free(dialog);
 }
 
@@ -79,9 +62,6 @@ on_timer_settings_window_destroy(GtkWidget *widget, gpointer user_data)
     return;
   }
 
-  g_message("on_timer_settings_window_destroy: dialog=%p window=%p",
-            (void *)dialog,
-            (void *)dialog->window);
   AppState *state = dialog->state;
   timer_settings_dialog_teardown(dialog);
   g_info("Timer settings window destroyed");
@@ -96,9 +76,6 @@ on_timer_settings_window_close(GtkWindow *window, gpointer user_data)
   (void)window;
   TimerSettingsDialog *dialog = user_data;
   if (dialog != NULL) {
-    g_message("on_timer_settings_window_close: dialog=%p window=%p",
-              (void *)dialog,
-              (void *)dialog->window);
     dialog->suppress_signals = TRUE;
     g_info("Timer settings window close requested");
   }
@@ -418,6 +395,7 @@ show_timer_settings_window(AppState *state)
   TimerSettingsDialog *dialog = g_new0(TimerSettingsDialog, 1);
   dialog->state = state;
   dialog->window = GTK_WINDOW(window);
+  dialog->focus_guard_model = focus_guard_settings_model_new();
   dialog->focus_spin = GTK_SPIN_BUTTON(focus_spin);
   dialog->short_spin = GTK_SPIN_BUTTON(short_spin);
   dialog->long_spin = GTK_SPIN_BUTTON(long_spin);

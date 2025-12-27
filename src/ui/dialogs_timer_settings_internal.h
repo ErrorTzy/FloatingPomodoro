@@ -1,9 +1,8 @@
 #pragma once
 
 #include <gtk/gtk.h>
-#include <gio/gio.h>
-
 #include "app/app_state.h"
+#include "ui/focus_guard_settings_model.h"
 
 typedef struct {
   AppState *state;
@@ -23,15 +22,12 @@ typedef struct {
   GtkWidget *focus_guard_ollama_status_label;
   GtkWidget *focus_guard_trafilatura_status_label;
   GtkWidget *focus_guard_ollama_section;
-  GtkStringList *focus_guard_ollama_models;
-  gboolean focus_guard_ollama_models_weak_set;
-  GCancellable *focus_guard_ollama_refresh_cancellable;
   GtkWidget *focus_guard_list;
   GtkWidget *focus_guard_empty_label;
   GtkWidget *focus_guard_entry;
   GtkWidget *focus_guard_active_label;
   guint focus_guard_active_source;
-  char *focus_guard_last_external;
+  FocusGuardSettingsModel *focus_guard_model;
   gboolean suppress_signals;
 } TimerSettingsDialog;
 
@@ -40,4 +36,3 @@ void focus_guard_settings_append(TimerSettingsDialog *dialog,
                                  GtkWidget *chrome_root);
 void focus_guard_settings_update_controls(TimerSettingsDialog *dialog);
 void focus_guard_start_active_monitor(TimerSettingsDialog *dialog);
-void focus_guard_clear_model_ref(TimerSettingsDialog *dialog);

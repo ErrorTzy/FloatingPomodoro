@@ -26,6 +26,7 @@ app_sources = files(
   'ui/dialogs_confirm.c',
   'ui/dialogs_focus_guard.c',
   'ui/dialogs_timer_settings.c',
+  'ui/focus_guard_settings_model.c',
   'ui/main_window.c',
   'ui/task_list.c',
   'utils/x11.c',

@@ -133,6 +133,10 @@ THE MOST IMPORTANT RULE IS: Separation of Concern!
   - Per-window widgets live inside a window-scoped struct owned by that window and stored via `g_object_set_data_full`.
   - Avoid holding pointers to child widgets across windows; pass data, not widgets.
   - Prefer GTK helpers that manage model ownership (e.g., `gtk_drop_down_new_from_strings`) and avoid manual ref/unref unless you clearly own the object.
+  - Dialogs must own their models via a dialog-scoped view-model (a small GObject). Widgets consume models but never own them; dialog structs must not store widget-owned models.
+  - If a widget must expose a model, keep it in the view-model and set it on the widget; never cache the widget's model pointer without owning a ref.
+  - Async callbacks must use `GWeakRef` to the dialog/view-model and bail out if the target is gone.
+  - Prefer dialog/view-model cleanup in `dispose/finalize` over ad-hoc teardown orderings.
   - Signals should use window-scoped user data so teardown can’t touch stale pointers.
 
 ### Power/Battery Guidelines
