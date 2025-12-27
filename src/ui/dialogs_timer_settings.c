@@ -202,7 +202,7 @@ show_timer_settings_window(AppState *state)
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Settings");
   gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
-  gtk_window_set_modal(GTK_WINDOW(window), TRUE);
+  gtk_window_set_modal(GTK_WINDOW(window), FALSE);
   gtk_window_set_default_size(GTK_WINDOW(window), 720, 620);
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);

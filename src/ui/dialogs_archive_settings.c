@@ -180,7 +180,7 @@ show_archive_settings_window(AppState *state)
   } else {
     gtk_window_set_transient_for(GTK_WINDOW(window), state->window);
   }
-  gtk_window_set_modal(GTK_WINDOW(window), TRUE);
+  gtk_window_set_modal(GTK_WINDOW(window), FALSE);
   gtk_window_set_default_size(GTK_WINDOW(window), 420, 260);
 
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
