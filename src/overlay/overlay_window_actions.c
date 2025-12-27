@@ -134,6 +134,10 @@ overlay_window_set_info_revealed(OverlayWindow *overlay,
   gtk_revealer_set_reveal_child(GTK_REVEALER(overlay->info_revealer), reveal);
 
   overlay_window_update_input_region(overlay);
+  if (animate) {
+    overlay_window_request_size_updates(overlay,
+                                        OVERLAY_INFO_REVEAL_DURATION_MS + 80);
+  }
 }
 
 void

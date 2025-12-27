@@ -5,6 +5,72 @@
 #define OVERLAY_WARNING_HALO_PADDING 32
 #define OVERLAY_WARNING_APP_WIDTH_RATIO 0.6
 #define OVERLAY_WARNING_FOCUS_WIDTH_RATIO 0.7
+#define OVERLAY_SIZE_TICK_DEFAULT_MS 300
+
+static void
+overlay_window_update_warning_app_width(OverlayWindow *overlay,
+                                        int bubble_width);
+static void
+overlay_window_update_warning_focus_size(OverlayWindow *overlay,
+                                         int bubble_width);
+
+static gboolean
+overlay_window_size_tick(GtkWidget *widget,
+                         GdkFrameClock *frame_clock,
+                         gpointer user_data)
+{
+  (void)widget;
+  (void)frame_clock;
+  OverlayWindow *overlay = user_data;
+  if (overlay == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+
+  int width = 0;
+  int height = 0;
+  if (overlay->bubble != NULL) {
+    width = gtk_widget_get_width(overlay->bubble);
+    height = gtk_widget_get_height(overlay->bubble);
+  }
+
+  int bubble_size = width < height ? width : height;
+  overlay_window_update_warning_app_width(overlay, bubble_size);
+  overlay_window_update_warning_focus_size(overlay, bubble_size);
+  overlay_window_update_input_region(overlay);
+
+  if (g_get_monotonic_time() >= overlay->size_tick_until_us) {
+    overlay->size_tick_id = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  return G_SOURCE_CONTINUE;
+}
+
+void
+overlay_window_request_size_updates(OverlayWindow *overlay, guint duration_ms)
+{
+  if (overlay == NULL || overlay->root == NULL) {
+    return;
+  }
+
+  if (duration_ms == 0) {
+    duration_ms = OVERLAY_SIZE_TICK_DEFAULT_MS;
+  }
+
+  gint64 now = g_get_monotonic_time();
+  gint64 until = now + ((gint64)duration_ms * 1000);
+  if (until > overlay->size_tick_until_us) {
+    overlay->size_tick_until_us = until;
+  }
+
+  if (overlay->size_tick_id == 0) {
+    overlay->size_tick_id =
+        gtk_widget_add_tick_callback(overlay->root,
+                                     overlay_window_size_tick,
+                                     overlay,
+                                     NULL);
+  }
+}
 
 static void
 overlay_window_update_warning_app_width(OverlayWindow *overlay, int bubble_width)
@@ -125,40 +191,6 @@ overlay_window_update_warning_focus_size(OverlayWindow *overlay, int bubble_widt
   pango_attr_list_insert(attrs, size_attr);
   gtk_label_set_attributes(GTK_LABEL(overlay->warning_focus_label), attrs);
   pango_attr_list_unref(attrs);
-}
-
-static void
-overlay_window_on_bubble_size_allocate(GtkWidget *widget,
-                                       int width,
-                                       int height,
-                                       int baseline,
-                                       gpointer user_data)
-{
-  (void)widget;
-  (void)baseline;
-  OverlayWindow *overlay = user_data;
-  if (overlay == NULL) {
-    return;
-  }
-
-  int bubble_size = width < height ? width : height;
-  overlay_window_update_warning_app_width(overlay, bubble_size);
-  overlay_window_update_warning_focus_size(overlay, bubble_size);
-  overlay_window_update_input_region(overlay);
-}
-
-static void
-overlay_window_on_root_size_allocate(GtkWidget *widget,
-                                     int width,
-                                     int height,
-                                     int baseline,
-                                     gpointer user_data)
-{
-  (void)widget;
-  (void)width;
-  (void)height;
-  (void)baseline;
-  overlay_window_update_input_region(user_data);
 }
 
 static GtkWidget *
@@ -472,18 +504,7 @@ overlay_window_build_ui(OverlayWindow *overlay)
 
   overlay_window_update_warning_app_width(overlay, OVERLAY_BUBBLE_SIZE);
   overlay_window_update_warning_focus_size(overlay, OVERLAY_BUBBLE_SIZE);
-  g_signal_connect(root,
-                   "size-allocate",
-                   G_CALLBACK(overlay_window_on_root_size_allocate),
-                   overlay);
-  g_signal_connect(bubble,
-                   "size-allocate",
-                   G_CALLBACK(overlay_window_on_bubble_size_allocate),
-                   overlay);
-  g_signal_connect(revealer,
-                   "size-allocate",
-                   G_CALLBACK(overlay_window_on_root_size_allocate),
-                   overlay);
 
   overlay_window_bind_actions(overlay, bubble);
+  overlay_window_request_size_updates(overlay, OVERLAY_SIZE_TICK_DEFAULT_MS);
 }

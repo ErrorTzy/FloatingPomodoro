@@ -40,6 +40,8 @@ struct _OverlayWindow {
   PomodoroPhase phase;
   PomodoroTimerState timer_state;
   gboolean warning_active;
+  guint size_tick_id;
+  gint64 size_tick_until_us;
 };
 
 GtkWindow *overlay_window_create_window(GtkApplication *app);
@@ -54,6 +56,8 @@ void overlay_window_set_phase_class(OverlayWindow *overlay);
 void overlay_window_set_opacity(OverlayWindow *overlay, gdouble value);
 void overlay_window_bind_actions(OverlayWindow *overlay, GtkWidget *bubble);
 void overlay_window_update_input_region(OverlayWindow *overlay);
+void overlay_window_request_size_updates(OverlayWindow *overlay,
+                                         guint duration_ms);
 
 void overlay_window_draw(GtkDrawingArea *area,
                          cairo_t *cr,
