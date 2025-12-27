@@ -225,12 +225,6 @@ focus_guard_get_selected_model(TimerSettingsDialog *dialog)
   }
 
   guint selected = gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
-  g_message("focus_guard_get_selected_model: dialog=%p dropdown=%p models=%p "
-            "selected=%u",
-            (void *)dialog,
-            (void *)dialog->focus_guard_ollama_dropdown,
-            (void *)dialog->focus_guard_ollama_models,
-            selected);
   if (selected == GTK_INVALID_LIST_POSITION) {
     return NULL;
   }
@@ -300,20 +294,6 @@ focus_guard_apply_models_to_dropdown(TimerSettingsDialog *dialog,
     return;
   }
 
-  GListModel *current_model =
-      gtk_drop_down_get_model(dialog->focus_guard_ollama_dropdown);
-  guint current_selected =
-      gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
-  g_message("focus_guard_apply_models_to_dropdown: dialog=%p dropdown=%p "
-            "current_model=%p current_selected=%u dialog_model=%p list_ptr=%p "
-            "new_count=%u",
-            (void *)dialog,
-            (void *)dialog->focus_guard_ollama_dropdown,
-            (void *)current_model,
-            current_selected,
-            (void *)dialog->focus_guard_ollama_models,
-            (void *)dialog->focus_guard_ollama_models,
-            models != NULL ? models->len : 0);
 
   gboolean prev_suppress = dialog->suppress_signals;
   dialog->suppress_signals = TRUE;
@@ -409,13 +389,6 @@ focus_guard_ollama_refresh_complete(GObject *source_object,
 
   GError *error = NULL;
   GPtrArray *models = g_task_propagate_pointer(G_TASK(res), &error);
-  g_message("focus_guard_ollama_refresh_complete: window=%p dialog=%p "
-            "models=%p len=%u error=%s",
-            (void *)window,
-            (void *)dialog,
-            (void *)models,
-            models != NULL ? models->len : 0,
-            error != NULL ? error->message : "(none)");
   if (models == NULL) {
     focus_guard_set_ollama_status(dialog,
                                   error != NULL && error->message != NULL
@@ -451,11 +424,6 @@ focus_guard_refresh_models(TimerSettingsDialog *dialog)
   if (dialog == NULL || dialog->focus_guard_ollama_dropdown == NULL) {
     return;
   }
-
-  g_message("focus_guard_refresh_models: dialog=%p dropdown=%p models=%p",
-            (void *)dialog,
-            (void *)dialog->focus_guard_ollama_dropdown,
-            (void *)dialog->focus_guard_ollama_models);
 
   if (dialog->focus_guard_ollama_refresh_cancellable != NULL) {
     g_cancellable_cancel(dialog->focus_guard_ollama_refresh_cancellable);
@@ -701,17 +669,6 @@ on_focus_guard_model_changed(GObject *object,
     return;
   }
 
-  guint selected = GTK_INVALID_LIST_POSITION;
-  if (dialog->focus_guard_ollama_dropdown != NULL) {
-    selected = gtk_drop_down_get_selected(dialog->focus_guard_ollama_dropdown);
-  }
-  g_message("on_focus_guard_model_changed: dialog=%p dropdown=%p models=%p "
-            "selected=%u suppress=%d",
-            (void *)dialog,
-            (void *)dialog->focus_guard_ollama_dropdown,
-            (void *)dialog->focus_guard_ollama_models,
-            selected,
-            dialog->suppress_signals);
   if (dialog->suppress_signals) {
     return;
   }

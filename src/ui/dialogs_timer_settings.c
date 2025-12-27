@@ -14,12 +14,6 @@ timer_settings_dialog_free(gpointer data)
     return;
   }
 
-  g_message("timer_settings_dialog_free: dialog=%p window=%p dropdown=%p models=%p",
-            (void *)dialog,
-            (void *)dialog->window,
-            (void *)dialog->focus_guard_ollama_dropdown,
-            (void *)dialog->focus_guard_ollama_models);
-
   if (dialog->focus_guard_active_source != 0) {
     g_source_remove(dialog->focus_guard_active_source);
     dialog->focus_guard_active_source = 0;
