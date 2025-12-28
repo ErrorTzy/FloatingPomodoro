@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "app/app_init.h"
-#include "xfce4_floating_pomodoro_resources.h"
+#include "floating_pomodoro_resources.h"
 
 typedef enum {
   LOG_LEVEL_WARN = 0,
@@ -108,7 +108,7 @@ app_init_crash_handler(void)
 void
 app_register_resources(void)
 {
-  g_resources_register(xfce4_floating_pomodoro_get_resource());
+  g_resources_register(floating_pomodoro_get_resource());
 }
 
 void
@@ -124,7 +124,7 @@ app_init_fonts(void)
   const size_t font_count = G_N_ELEMENTS(font_resources);
 
   char *font_dir = g_build_filename(g_get_user_cache_dir(),
-                                    "xfce4-floating-pomodoro",
+                                    "floating-pomodoro",
                                     "fonts",
                                     NULL);
   g_mkdir_with_parents(font_dir, 0755);

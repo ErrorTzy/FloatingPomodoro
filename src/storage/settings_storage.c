@@ -49,7 +49,7 @@ char *
 settings_storage_get_path(void)
 {
   return g_build_filename(g_get_user_data_dir(),
-                          "xfce4-floating-pomodoro",
+                          "floating-pomodoro",
                           "settings.ini",
                           NULL);
 }

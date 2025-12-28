@@ -1,4 +1,4 @@
-project('xfce4-floating-pomodoro', 'c',
+project('floating-pomodoro', 'c',
   version: '0.1.0',
   meson_version: '>=0.60.0',
   default_options: ['c_std=c11', 'warning_level=2']
@@ -26,7 +26,7 @@ gnome = import('gnome')
 
 conf = configuration_data()
 conf.set_quoted('APP_ID', 'com.scott.Xfce4FloatingPomodoro')
-conf.set_quoted('APP_NAME', 'XFCE4 Floating Pomodoro')
+conf.set_quoted('APP_NAME', 'Floating Pomodoro')
 conf.set_quoted('APP_VERSION', meson.project_version())
 conf.set10('HAVE_CHROME_OLLAMA', chrome_ollama_enabled)
 conf.set10('HAVE_LIBSOUP', libsoup_dep.found())
@@ -38,10 +38,10 @@ configure_file(
 )
 
 resources = gnome.compile_resources(
-  'xfce4_floating_pomodoro_resources',
+  'floating_pomodoro_resources',
   'data/resources.gresource.xml',
   source_dir: 'data',
-  c_name: 'xfce4_floating_pomodoro'
+  c_name: 'floating_pomodoro'
 )
 
 subdir('src')

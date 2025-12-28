@@ -1,4 +1,4 @@
-# XFCE4 Floating Pomodoro — Development Plan
+# Floating Pomodoro — Development Plan
 
 This document defines the project goals, architecture, visual language, coding standards, and a PR‑by‑PR roadmap. It intentionally contains no implementation code.
 

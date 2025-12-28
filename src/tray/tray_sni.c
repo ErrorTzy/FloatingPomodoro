@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-static const char *tray_icon_name = "xfce4-floating-pomodoro";
+static const char *tray_icon_name = "floating-pomodoro";
 
 static const char sni_introspection_xml[] =
     "<node>"
@@ -187,7 +187,7 @@ tray_sni_get_property(GDBusConnection *connection,
     return g_variant_new_string("ApplicationStatus");
   }
   if (g_strcmp0(property_name, "Id") == 0) {
-    return g_variant_new_string("xfce4-floating-pomodoro");
+    return g_variant_new_string("floating-pomodoro");
   }
   if (g_strcmp0(property_name, "Title") == 0) {
     return g_variant_new_string(APP_NAME);

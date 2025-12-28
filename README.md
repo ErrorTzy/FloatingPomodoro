@@ -1,6 +1,8 @@
-# XFCE4 Floating Pomodoro
+# Floating Pomodoro
 
-Low-power Pomodoro timer for Debian XFCE (X11), built with GTK4 and C. It combines a modern main window, a floating always-visible overlay, tray controls, and an optional focus guard that can warn when you drift off-task.
+Low-power Pomodoro timer for GTK4 on X11 (Linux). It combines a modern main window, a floating always-visible overlay, tray controls, and an optional focus guard that can warn when you drift off-task.
+
+Platform scope: GTK4 + X11 only. It is not cross-platform and does not support Wayland today. Wayland support or a Qt port may be considered in the distant future.
 
 ## Highlights
 
@@ -120,12 +122,12 @@ Maintenance:
 
 ## System requirements
 
-- Debian XFCE, X11 session
+- Linux with X11 session (tested on Debian XFCE)
 - Xfwm4 compositor enabled (for overlay transparency)
 - GTK4 (>= 4.8)
 - X11 development headers for build
 
-Wayland is not supported.
+Wayland is not supported today.
 
 ## Build
 
@@ -168,34 +170,34 @@ meson setup build -Dchrome_ollama=enabled
 ## Run
 
 ```sh
-./build/xfce4-floating-pomodoro
+./build/floating-pomodoro
 ```
 
 Autostart launch (used by the autostart .desktop file):
 
 ```sh
-./build/xfce4-floating-pomodoro --autostart
+./build/floating-pomodoro --autostart
 ```
 
 ## Data locations
 
 All user data is stored under the XDG data dir:
-- Settings: `~/.local/share/xfce4-floating-pomodoro/settings.ini`
-- Tasks: `~/.local/share/xfce4-floating-pomodoro/tasks.ini`
-- Usage stats: `~/.local/share/xfce4-floating-pomodoro/usage_stats.sqlite3`
+- Settings: `~/.local/share/floating-pomodoro/settings.ini`
+- Tasks: `~/.local/share/floating-pomodoro/tasks.ini`
+- Usage stats: `~/.local/share/floating-pomodoro/usage_stats.sqlite3`
 
 Bundled fonts are extracted to:
-- `~/.cache/xfce4-floating-pomodoro/fonts/`
+- `~/.cache/floating-pomodoro/fonts/`
 
 Autostart file:
-- `~/.config/autostart/xfce4-floating-pomodoro.desktop`
+- `~/.config/autostart/floating-pomodoro.desktop`
 
 ## Logging and debug
 
 Logging is quiet by default. Set:
 
 ```sh
-POMODORO_LOG_LEVEL=info ./build/xfce4-floating-pomodoro
+POMODORO_LOG_LEVEL=info ./build/floating-pomodoro
 ```
 
 Accepted values: `warn` (default), `info`, `debug`.
@@ -203,7 +205,7 @@ Accepted values: `warn` (default), `info`, `debug`.
 Fast timer mode for UI testing:
 
 ```sh
-POMODORO_TEST_TIMER=1 ./build/xfce4-floating-pomodoro
+POMODORO_TEST_TIMER=1 ./build/floating-pomodoro
 ```
 
 ## Chrome and Ollama setup (optional)

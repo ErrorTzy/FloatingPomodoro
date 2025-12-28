@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=XFCE4 Floating Pomodoro
-Comment=Low-power Pomodoro timer for XFCE
-Exec=xfce4-floating-pomodoro
-Icon=xfce4-floating-pomodoro
-Terminal=false
-Categories=Utility;Productivity;
-StartupWMClass=com.scott.Xfce4FloatingPomodoro

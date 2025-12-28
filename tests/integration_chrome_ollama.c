@@ -147,7 +147,7 @@ spawn_chrome(const char *chrome_bin,
     return FALSE;
   }
 
-  char *profile_dir = g_dir_make_tmp("xfce4-pomodoro-chrome-XXXXXX", error);
+  char *profile_dir = g_dir_make_tmp("floating-pomodoro-chrome-XXXXXX", error);
   if (profile_dir == NULL) {
     return FALSE;
   }
@@ -340,7 +340,7 @@ test_chrome_ollama_pipeline(void)
   const char *body =
       "Integration test for Chrome and Ollama. Task: Write integration tests for Chrome and Ollama.";
 
-  char *temp_dir = g_dir_make_tmp("xfce4-pomodoro-test-XXXXXX", NULL);
+  char *temp_dir = g_dir_make_tmp("floating-pomodoro-test-XXXXXX", NULL);
   g_assert_nonnull(temp_dir);
 
   char *html_path = g_build_filename(temp_dir, "index.html", NULL);

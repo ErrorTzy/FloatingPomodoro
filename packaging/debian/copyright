@@ -1,5 +1,5 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: XFCE4 Floating Pomodoro
+Upstream-Name: Floating Pomodoro
 Source: local
 
 Files: *
@@ -27,4 +27,4 @@ Files: data/fonts/Manrope-*.ttf data/fonts/OFL.txt
 Copyright: 2018 The Manrope Project Authors (https://github.com/sharanda/manrope)
 License: OFL-1.1
  This Font Software is licensed under the SIL Open Font License, Version 1.1.
- The full text is included in /usr/share/doc/xfce4-floating-pomodoro/OFL.txt.
+ The full text is included in /usr/share/doc/floating-pomodoro/OFL.txt.

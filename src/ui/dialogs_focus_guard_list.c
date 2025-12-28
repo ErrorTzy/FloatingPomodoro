@@ -63,7 +63,7 @@ focus_guard_is_self_app(const char *app_name)
   }
 
   const char *prg = g_get_prgname();
-  const char *candidates[] = {APP_ID, APP_NAME, prg, "xfce4-floating-pomodoro", NULL};
+  const char *candidates[] = {APP_ID, APP_NAME, prg, "floating-pomodoro", NULL};
 
   char *norm_app = focus_guard_normalize_id(app_name);
   if (norm_app == NULL || *norm_app == '\0') {

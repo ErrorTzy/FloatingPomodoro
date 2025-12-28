@@ -1,4 +1,4 @@
-Source: xfce4-floating-pomodoro
+Source: floating-pomodoro
 Section: utils
 Priority: optional
 Maintainer: Scott <errortang234@gmail.com>
@@ -13,9 +13,9 @@ Build-Depends: debhelper-compat (= 13),
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
-Package: xfce4-floating-pomodoro
+Package: floating-pomodoro
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Low-power Pomodoro timer for XFCE (X11)
- A low-power Pomodoro timer designed for XFCE on X11 with a floating overlay,
- tray integration, and focus guard features.
+Description: Low-power Pomodoro timer for GTK4/X11
+ A low-power Pomodoro timer designed for GTK4 on X11 with a floating overlay,
+ tray integration, and focus guard features. X11-only.

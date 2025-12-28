@@ -1,0 +1,6 @@
+data/desktop/floating-pomodoro.desktop usr/share/applications/
+data/icons/hicolor/scalable/apps/floating-pomodoro.svg usr/share/icons/hicolor/scalable/apps/
+data/fonts/Manrope-Regular.ttf usr/share/floating-pomodoro/fonts/
+data/fonts/Manrope-SemiBold.ttf usr/share/floating-pomodoro/fonts/
+data/fonts/Manrope-Bold.ttf usr/share/floating-pomodoro/fonts/
+data/fonts/OFL.txt usr/share/doc/floating-pomodoro/

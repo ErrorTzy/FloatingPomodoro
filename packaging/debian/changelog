@@ -1,4 +1,4 @@
-xfce4-floating-pomodoro (0.1.0-1) unstable; urgency=medium
+floating-pomodoro (0.1.0-1) unstable; urgency=medium
 
   * Initial Debian packaging.
 

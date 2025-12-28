@@ -62,7 +62,7 @@ if chrome_ollama_enabled
 endif
 
 executable(
-  'xfce4-floating-pomodoro',
+  'floating-pomodoro',
   app_sources,
   dependencies: app_deps,
   include_directories: include_directories('..', '.'),

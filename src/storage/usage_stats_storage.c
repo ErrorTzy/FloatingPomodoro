@@ -12,7 +12,7 @@ static char *
 usage_stats_storage_get_path(void)
 {
   return g_build_filename(g_get_user_data_dir(),
-                          "xfce4-floating-pomodoro",
+                          "floating-pomodoro",
                           "usage_stats.sqlite3",
                           NULL);
 }

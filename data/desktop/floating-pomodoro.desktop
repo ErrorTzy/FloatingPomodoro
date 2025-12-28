@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Floating Pomodoro
+Comment=Low-power GTK4/X11-only Pomodoro timer
+Exec=floating-pomodoro
+Icon=floating-pomodoro
+Terminal=false
+Categories=Utility;Productivity;
+StartupWMClass=com.scott.Xfce4FloatingPomodoro

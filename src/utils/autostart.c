@@ -10,7 +10,7 @@ autostart_get_path(void)
 {
   return g_build_filename(g_get_user_config_dir(),
                           "autostart",
-                          "xfce4-floating-pomodoro.desktop",
+                          "floating-pomodoro.desktop",
                           NULL);
 }
 
@@ -21,9 +21,9 @@ autostart_write_file(const char *path, GError **error)
       "[Desktop Entry]\n"
       "Type=Application\n"
       "Name=%s\n"
-      "Comment=Low-power Pomodoro timer for XFCE\n"
-      "Exec=xfce4-floating-pomodoro --autostart\n"
-      "Icon=xfce4-floating-pomodoro\n"
+      "Comment=Low-power GTK4/X11-only Pomodoro timer\n"
+      "Exec=floating-pomodoro --autostart\n"
+      "Icon=floating-pomodoro\n"
       "Terminal=false\n"
       "Categories=Utility;Productivity;\n"
       "StartupWMClass=%s\n"
