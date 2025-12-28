@@ -9,3 +9,5 @@
 /packaging/debian/*.substvars
 /packaging/debian/xfce4-floating-pomodoro/
 /packaging/debian/floating-pomodoro/
+
+AGENTS.md
