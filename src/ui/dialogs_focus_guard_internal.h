@@ -31,6 +31,8 @@ void on_focus_guard_warnings_toggled(GtkCheckButton *button, gpointer user_data)
 void on_focus_guard_chrome_toggled(GtkCheckButton *button, gpointer user_data);
 void on_focus_guard_chrome_port_changed(GtkSpinButton *spin,
                                         gpointer user_data);
+void on_focus_guard_trafilatura_python_changed(GtkEditable *editable,
+                                                gpointer user_data);
 void on_focus_guard_model_changed(GObject *object,
                                   GParamSpec *pspec,
                                   gpointer user_data);

@@ -1,7 +1,5 @@
 #include "ui/dialogs_focus_guard_internal.h"
 
-#include "focus/trafilatura_client.h"
-
 void
 focus_guard_settings_append(TimerSettingsDialog *dialog,
                             GtkWidget *focus_root,
@@ -156,6 +154,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
   GtkButton *ollama_refresh_button = NULL;
   GtkWidget *ollama_status_label = NULL;
   GtkWidget *trafilatura_status_label = NULL;
+  GtkEntry *trafilatura_python_entry = NULL;
 
   dialog->focus_guard_ollama_section = NULL;
 
@@ -214,12 +213,27 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
     gtk_widget_set_halign(port_spin, GTK_ALIGN_END);
     gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(port_spin), TRUE);
 
+    GtkWidget *python_label = gtk_label_new("Trafilatura python");
+    gtk_widget_add_css_class(python_label, "setting-label");
+    gtk_widget_set_halign(python_label, GTK_ALIGN_START);
+    gtk_widget_set_hexpand(python_label, TRUE);
+    GtkWidget *python_entry = gtk_entry_new();
+    gtk_widget_add_css_class(python_entry, "task-entry");
+    gtk_widget_set_hexpand(python_entry, TRUE);
+    gtk_entry_set_placeholder_text(GTK_ENTRY(python_entry),
+                                   "python3 or /path/to/python");
+    gtk_widget_set_tooltip_text(
+        python_entry,
+        "Leave empty to use python3 on PATH. Set a venv/conda Python if needed.");
+
     gtk_grid_attach(GTK_GRID(chrome_grid), chrome_enable_label, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(chrome_grid), chrome_enable_check, 1, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(chrome_grid), model_label, 0, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(chrome_grid), model_controls, 1, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(chrome_grid), port_label, 0, 2, 1, 1);
     gtk_grid_attach(GTK_GRID(chrome_grid), port_spin, 1, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), python_label, 0, 3, 1, 1);
+    gtk_grid_attach(GTK_GRID(chrome_grid), python_entry, 1, 3, 1, 1);
 
     GtkWidget *chrome_hint = gtk_label_new(
         "Chrome must be started with --remote-debugging-port to enable page checks.");
@@ -227,22 +241,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
     gtk_widget_set_halign(chrome_hint, GTK_ALIGN_START);
     gtk_label_set_wrap(GTK_LABEL(chrome_hint), TRUE);
 
-    const char *trafilatura_text = NULL;
-    TrafilaturaStatus trafilatura_status = trafilatura_client_get_status();
-    switch (trafilatura_status) {
-      case TRAFILATURA_STATUS_AVAILABLE:
-        trafilatura_text = "Trafilatura enabled";
-        break;
-      case TRAFILATURA_STATUS_NO_PYTHON:
-        trafilatura_text = "Trafilatura not available: python not found";
-        break;
-      case TRAFILATURA_STATUS_NO_MODULE:
-      default:
-        trafilatura_text = "Trafilatura not available: trafilatura not found";
-        break;
-    }
-
-    GtkWidget *trafilatura_label = gtk_label_new(trafilatura_text);
+    GtkWidget *trafilatura_label = gtk_label_new("Trafilatura status: checking...");
     gtk_widget_add_css_class(trafilatura_label, "task-meta");
     gtk_widget_set_halign(trafilatura_label, GTK_ALIGN_START);
     gtk_label_set_wrap(GTK_LABEL(trafilatura_label), TRUE);
@@ -267,6 +266,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
     ollama_refresh_button = GTK_BUTTON(model_refresh);
     ollama_status_label = status_label;
     trafilatura_status_label = trafilatura_label;
+    trafilatura_python_entry = GTK_ENTRY(python_entry);
     dialog->focus_guard_ollama_section = chrome_root;
   }
 
@@ -283,6 +283,7 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
   dialog->focus_guard_ollama_refresh_button = ollama_refresh_button;
   dialog->focus_guard_ollama_status_label = ollama_status_label;
   dialog->focus_guard_trafilatura_status_label = trafilatura_status_label;
+  dialog->focus_guard_trafilatura_python_entry = trafilatura_python_entry;
 
   g_signal_connect(guard_interval_spin,
                    "value-changed",
@@ -325,6 +326,10 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
     g_signal_connect(chrome_port_spin,
                      "value-changed",
                      G_CALLBACK(on_focus_guard_chrome_port_changed),
+                     dialog);
+    g_signal_connect(trafilatura_python_entry,
+                     "changed",
+                     G_CALLBACK(on_focus_guard_trafilatura_python_changed),
                      dialog);
   }
 

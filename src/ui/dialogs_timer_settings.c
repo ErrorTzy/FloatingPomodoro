@@ -30,6 +30,7 @@ timer_settings_dialog_teardown(TimerSettingsDialog *dialog)
   dialog->focus_guard_ollama_refresh_button = NULL;
   dialog->focus_guard_ollama_status_label = NULL;
   dialog->focus_guard_trafilatura_status_label = NULL;
+  dialog->focus_guard_trafilatura_python_entry = NULL;
   dialog->focus_guard_chrome_check = NULL;
   dialog->focus_guard_chrome_port_spin = NULL;
   dialog->focus_guard_list = NULL;

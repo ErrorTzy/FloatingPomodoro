@@ -262,6 +262,18 @@ settings_storage_load_focus_guard(FocusGuardConfig *config, GError **error)
     }
   }
 
+  if (g_key_file_has_key(key_file, "focus_guard", "trafilatura_python_path", NULL)) {
+    gchar *value = g_key_file_get_string(key_file,
+                                         "focus_guard",
+                                         "trafilatura_python_path",
+                                         NULL);
+    if (value != NULL) {
+      g_free(config->trafilatura_python_path);
+      config->trafilatura_python_path = g_strdup(value);
+      g_free(value);
+    }
+  }
+
   if (g_key_file_has_key(key_file, "focus_guard", "blacklist", NULL)) {
     gsize length = 0;
     gchar **list = g_key_file_get_string_list(key_file,
@@ -336,6 +348,12 @@ settings_storage_save_focus_guard(const FocusGuardConfig *config,
                         "ollama_model",
                         normalized.ollama_model != NULL
                             ? normalized.ollama_model
+                            : "");
+  g_key_file_set_string(key_file,
+                        "focus_guard",
+                        "trafilatura_python_path",
+                        normalized.trafilatura_python_path != NULL
+                            ? normalized.trafilatura_python_path
                             : "");
 
   if (normalized.blacklist != NULL) {

@@ -24,6 +24,7 @@ typedef struct {
   GtkButton *focus_guard_ollama_refresh_button;
   GtkWidget *focus_guard_ollama_status_label;
   GtkWidget *focus_guard_trafilatura_status_label;
+  GtkEntry *focus_guard_trafilatura_python_entry;
   GtkWidget *focus_guard_ollama_section;
   GtkWidget *focus_guard_list;
   GtkWidget *focus_guard_empty_label;

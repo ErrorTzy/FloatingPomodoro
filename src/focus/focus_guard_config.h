@@ -10,6 +10,7 @@ typedef struct {
   gboolean chrome_ollama_enabled;
   guint chrome_debug_port;
   char *ollama_model;
+  char *trafilatura_python_path;
 } FocusGuardConfig;
 
 FocusGuardConfig focus_guard_config_default(void);

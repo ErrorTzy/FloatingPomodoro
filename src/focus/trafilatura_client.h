@@ -8,4 +8,4 @@ typedef enum {
   TRAFILATURA_STATUS_NO_MODULE = 2
 } TrafilaturaStatus;
 
-TrafilaturaStatus trafilatura_client_get_status(void);
+TrafilaturaStatus trafilatura_client_get_status(const char *python_path);

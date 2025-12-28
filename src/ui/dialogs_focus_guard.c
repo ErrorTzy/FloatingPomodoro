@@ -1,7 +1,49 @@
 #include "ui/dialogs_focus_guard_internal.h"
 
+#include "focus/trafilatura_client.h"
 #include "focus/focus_guard_x11.h"
 #include "storage/settings_storage.h"
+
+static void
+focus_guard_update_trafilatura_status(TimerSettingsDialog *dialog,
+                                      const FocusGuardConfig *config)
+{
+  if (dialog == NULL || dialog->focus_guard_trafilatura_status_label == NULL) {
+    return;
+  }
+
+  const char *python_path = NULL;
+  if (config != NULL && config->trafilatura_python_path != NULL &&
+      *config->trafilatura_python_path != '\0') {
+    python_path = config->trafilatura_python_path;
+  }
+
+  const char *status_text = NULL;
+  TrafilaturaStatus status = trafilatura_client_get_status(python_path);
+  switch (status) {
+    case TRAFILATURA_STATUS_AVAILABLE:
+      status_text = "Trafilatura enabled";
+      break;
+    case TRAFILATURA_STATUS_NO_PYTHON:
+      status_text = "Trafilatura not available: python not found";
+      break;
+    case TRAFILATURA_STATUS_NO_MODULE:
+    default:
+      status_text = "Trafilatura not available: trafilatura not found";
+      break;
+  }
+
+  char *label = NULL;
+  if (python_path != NULL) {
+    label = g_strdup_printf("%s (python: %s)", status_text, python_path);
+  } else {
+    label = g_strdup(status_text);
+  }
+
+  gtk_label_set_text(GTK_LABEL(dialog->focus_guard_trafilatura_status_label),
+                     label);
+  g_free(label);
+}
 
 void
 focus_guard_apply_settings(TimerSettingsDialog *dialog)
@@ -38,6 +80,12 @@ focus_guard_apply_settings(TimerSettingsDialog *dialog)
         gtk_check_button_get_active(dialog->focus_guard_chrome_check);
   }
 
+  if (dialog->focus_guard_trafilatura_python_entry != NULL) {
+    g_free(config.trafilatura_python_path);
+    config.trafilatura_python_path = g_strdup(gtk_editable_get_text(
+        GTK_EDITABLE(dialog->focus_guard_trafilatura_python_entry)));
+  }
+
   g_free(config.ollama_model);
   config.ollama_model = focus_guard_get_selected_model(dialog);
 
@@ -50,6 +98,7 @@ focus_guard_apply_settings(TimerSettingsDialog *dialog)
   focus_guard_config_normalize(&config);
 
   focus_guard_apply_config(dialog->state->focus_guard, config);
+  focus_guard_update_trafilatura_status(dialog, &config);
 
   GError *error = NULL;
   if (!settings_storage_save_focus_guard(&config, &error)) {
@@ -156,6 +205,14 @@ focus_guard_settings_update_controls(TimerSettingsDialog *dialog)
                               (gdouble)config.chrome_debug_port);
   }
 
+  if (dialog->focus_guard_trafilatura_python_entry != NULL) {
+    gtk_editable_set_text(
+        GTK_EDITABLE(dialog->focus_guard_trafilatura_python_entry),
+        config.trafilatura_python_path != NULL
+            ? config.trafilatura_python_path
+            : "");
+  }
+
   if (dialog->focus_guard_ollama_dropdown != NULL) {
     focus_guard_apply_model_selection(dialog, &config);
   }
@@ -191,6 +248,7 @@ focus_guard_settings_update_controls(TimerSettingsDialog *dialog)
     }
   }
 
+  focus_guard_update_trafilatura_status(dialog, &config);
   focus_guard_config_clear(&config);
 }
 
@@ -226,5 +284,13 @@ void
 on_focus_guard_chrome_port_changed(GtkSpinButton *spin, gpointer user_data)
 {
   (void)spin;
+  focus_guard_apply_settings((TimerSettingsDialog *)user_data);
+}
+
+void
+on_focus_guard_trafilatura_python_changed(GtkEditable *editable,
+                                          gpointer user_data)
+{
+  (void)editable;
   focus_guard_apply_settings((TimerSettingsDialog *)user_data);
 }

@@ -57,6 +57,7 @@ focus_guard_config_default(void)
   config.chrome_ollama_enabled = FALSE;
   config.chrome_debug_port = 9222;
   config.ollama_model = NULL;
+  config.trafilatura_python_path = NULL;
   return config;
 }
 
@@ -83,6 +84,14 @@ focus_guard_config_normalize(FocusGuardConfig *config)
     }
   }
 
+  if (config->trafilatura_python_path != NULL) {
+    char *trimmed = g_strstrip(config->trafilatura_python_path);
+    if (*trimmed == '\0') {
+      g_free(config->trafilatura_python_path);
+      config->trafilatura_python_path = NULL;
+    }
+  }
+
   focus_guard_config_normalize_blacklist(config);
 }
 
@@ -103,6 +112,10 @@ focus_guard_config_copy(const FocusGuardConfig *config)
   copy.blacklist = config->blacklist ? g_strdupv(config->blacklist) : g_new0(char *, 1);
   g_free(copy.ollama_model);
   copy.ollama_model = config->ollama_model ? g_strdup(config->ollama_model) : NULL;
+  g_free(copy.trafilatura_python_path);
+  copy.trafilatura_python_path = config->trafilatura_python_path
+                                     ? g_strdup(config->trafilatura_python_path)
+                                     : NULL;
   focus_guard_config_normalize(&copy);
   return copy;
 }
@@ -117,4 +130,5 @@ focus_guard_config_clear(FocusGuardConfig *config)
   g_strfreev(config->blacklist);
   config->blacklist = NULL;
   g_clear_pointer(&config->ollama_model, g_free);
+  g_clear_pointer(&config->trafilatura_python_path, g_free);
 }
