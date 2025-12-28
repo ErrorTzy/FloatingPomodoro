@@ -10,6 +10,7 @@
 #include "tray/tray_item.h"
 #include "ui/dialogs.h"
 #include "ui/task_list.h"
+#include "utils/autostart.h"
 #include "config.h"
 
 static const char *
@@ -295,6 +296,66 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
 }
 
 static void
+on_main_window_surface_state_changed(GObject *object,
+                                     GParamSpec *pspec,
+                                     gpointer user_data)
+{
+  (void)pspec;
+  AppState *state = user_data;
+  if (state == NULL || state->window == NULL || !state->minimize_to_tray ||
+      state->quit_requested) {
+    return;
+  }
+
+  GdkSurface *surface = GDK_SURFACE(object);
+  if (surface == NULL) {
+    return;
+  }
+
+  GdkToplevelState state_flags = gdk_toplevel_get_state(GDK_TOPLEVEL(surface));
+  if ((state_flags & GDK_TOPLEVEL_STATE_MINIMIZED) == 0) {
+    return;
+  }
+
+  if (!gtk_widget_get_visible(GTK_WIDGET(state->window))) {
+    return;
+  }
+
+  gtk_widget_set_visible(GTK_WIDGET(state->window), FALSE);
+}
+
+static void
+on_main_window_realize(GtkWidget *widget, gpointer user_data)
+{
+  AppState *state = user_data;
+  if (state == NULL) {
+    return;
+  }
+
+  GtkNative *native = gtk_widget_get_native(widget);
+  if (native == NULL) {
+    return;
+  }
+
+  GdkSurface *surface = gtk_native_get_surface(native);
+  if (surface == NULL) {
+    return;
+  }
+
+  if (g_object_get_data(G_OBJECT(surface), "minimize-to-tray-connected") != NULL) {
+    return;
+  }
+
+  g_signal_connect(surface,
+                   "notify::state",
+                   G_CALLBACK(on_main_window_surface_state_changed),
+                   state);
+  g_object_set_data(G_OBJECT(surface),
+                    "minimize-to-tray-connected",
+                    GINT_TO_POINTER(1));
+}
+
+static void
 on_main_window_destroy(GtkWidget *widget, gpointer user_data)
 {
   GtkApplication *app = user_data;
@@ -308,7 +369,7 @@ on_main_window_destroy(GtkWidget *widget, gpointer user_data)
 }
 
 void
-main_window_present(GtkApplication *app)
+main_window_present(GtkApplication *app, gboolean autostart_launch)
 {
   if (app != NULL) {
     GtkWindow *existing = g_object_get_data(G_OBJECT(app), "main-window");
@@ -363,6 +424,15 @@ main_window_present(GtkApplication *app)
     g_clear_error(&error);
   }
   state->close_to_tray = app_settings.close_to_tray;
+  state->autostart_enabled = app_settings.autostart_enabled;
+  state->autostart_start_in_tray = app_settings.autostart_start_in_tray;
+  state->minimize_to_tray = app_settings.minimize_to_tray;
+
+  if (!autostart_set_enabled(state->autostart_enabled, &error)) {
+    g_warning("Failed to update autostart settings: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
   pomodoro_timer_set_update_callback(timer,
                                      on_timer_tick,
                                      on_timer_phase_changed,
@@ -382,6 +452,7 @@ main_window_present(GtkApplication *app)
                    "close-request",
                    G_CALLBACK(on_main_window_close_request),
                    state);
+  g_signal_connect(window, "realize", G_CALLBACK(on_main_window_realize), state);
 
   GtkGesture *window_click = gtk_gesture_click_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(window_click), 0);
@@ -776,7 +847,17 @@ main_window_present(GtkApplication *app)
   gtk_box_append(GTK_BOX(root), task_section);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
-  gtk_window_present(GTK_WINDOW(window));
+  gboolean should_present = TRUE;
+  if (autostart_launch && state->autostart_enabled &&
+      state->autostart_start_in_tray) {
+    should_present = FALSE;
+  }
+  if (should_present) {
+    gtk_window_present(GTK_WINDOW(window));
+    g_info("Main window presented");
+  } else {
+    g_info("Main window created hidden");
+  }
 
   task_list_refresh(state);
   main_window_update_timer_ui(state);
@@ -784,5 +865,4 @@ main_window_present(GtkApplication *app)
     focus_guard_select_global(state->focus_guard);
   }
 
-  g_info("Main window presented");
 }

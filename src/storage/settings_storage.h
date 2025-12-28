@@ -7,6 +7,9 @@
 
 typedef struct {
   gboolean close_to_tray;
+  gboolean autostart_enabled;
+  gboolean autostart_start_in_tray;
+  gboolean minimize_to_tray;
 } AppSettings;
 
 char *settings_storage_get_path(void);

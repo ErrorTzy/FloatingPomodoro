@@ -5,6 +5,8 @@
 #include <X11/Xlib.h>
 #include <string.h>
 
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
 static void
 x11_send_wm_state(GtkWindow *window, gboolean add, const char *state_name)
 {
@@ -112,3 +114,7 @@ x11_window_set_skip_pager(GtkWindow *window, gboolean skip)
   (void)skip;
 #endif
 }
+
+#ifdef GDK_WINDOWING_X11
+G_GNUC_END_IGNORE_DEPRECATIONS
+#endif

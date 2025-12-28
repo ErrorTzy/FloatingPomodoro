@@ -7,6 +7,9 @@ settings_storage_app_default(void)
 {
   AppSettings settings = {0};
   settings.close_to_tray = TRUE;
+  settings.autostart_enabled = FALSE;
+  settings.autostart_start_in_tray = TRUE;
+  settings.minimize_to_tray = FALSE;
   return settings;
 }
 
@@ -397,6 +400,21 @@ settings_storage_load_app(AppSettings *settings, GError **error)
     settings->close_to_tray =
         g_key_file_get_boolean(key_file, "app", "close_to_tray", NULL);
   }
+  if (g_key_file_has_key(key_file, "app", "autostart_enabled", NULL)) {
+    settings->autostart_enabled =
+        g_key_file_get_boolean(key_file, "app", "autostart_enabled", NULL);
+  }
+  if (g_key_file_has_key(key_file, "app", "autostart_start_in_tray", NULL)) {
+    settings->autostart_start_in_tray =
+        g_key_file_get_boolean(key_file,
+                               "app",
+                               "autostart_start_in_tray",
+                               NULL);
+  }
+  if (g_key_file_has_key(key_file, "app", "minimize_to_tray", NULL)) {
+    settings->minimize_to_tray =
+        g_key_file_get_boolean(key_file, "app", "minimize_to_tray", NULL);
+  }
 
   g_key_file_free(key_file);
   g_free(path);
@@ -430,6 +448,18 @@ settings_storage_save_app(const AppSettings *settings, GError **error)
                          "app",
                          "close_to_tray",
                          settings->close_to_tray);
+  g_key_file_set_boolean(key_file,
+                         "app",
+                         "autostart_enabled",
+                         settings->autostart_enabled);
+  g_key_file_set_boolean(key_file,
+                         "app",
+                         "autostart_start_in_tray",
+                         settings->autostart_start_in_tray);
+  g_key_file_set_boolean(key_file,
+                         "app",
+                         "minimize_to_tray",
+                         settings->minimize_to_tray);
 
   gsize length = 0;
   gchar *data = g_key_file_to_data(key_file, &length, error);

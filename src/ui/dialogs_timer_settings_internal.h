@@ -12,6 +12,9 @@ typedef struct {
   GtkSpinButton *long_spin;
   GtkSpinButton *interval_spin;
   GtkCheckButton *close_to_tray_check;
+  GtkCheckButton *autostart_check;
+  GtkCheckButton *autostart_start_in_tray_check;
+  GtkCheckButton *minimize_to_tray_check;
   GtkCheckButton *focus_guard_global_check;
   GtkCheckButton *focus_guard_warnings_check;
   GtkSpinButton *focus_guard_interval_spin;

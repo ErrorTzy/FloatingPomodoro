@@ -29,6 +29,7 @@ app_sources = files(
   'ui/focus_guard_settings_model.c',
   'ui/main_window.c',
   'ui/task_list.c',
+  'utils/autostart.c',
   'utils/x11.c',
 ) + resources
 

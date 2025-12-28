@@ -4,6 +4,7 @@
 #include "core/pomodoro_timer.h"
 #include "focus/focus_guard.h"
 #include "storage/settings_storage.h"
+#include "utils/autostart.h"
 
 static void timer_settings_update_controls(TimerSettingsDialog *dialog);
 
@@ -35,6 +36,10 @@ timer_settings_dialog_teardown(TimerSettingsDialog *dialog)
   dialog->focus_guard_empty_label = NULL;
   dialog->focus_guard_entry = NULL;
   dialog->focus_guard_active_label = NULL;
+  dialog->close_to_tray_check = NULL;
+  dialog->autostart_check = NULL;
+  dialog->autostart_start_in_tray_check = NULL;
+  dialog->minimize_to_tray_check = NULL;
 
   dialog->window = NULL;
   dialog->state = NULL;
@@ -125,19 +130,77 @@ on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data)
 }
 
 static void
-on_close_to_tray_toggled(GtkCheckButton *button, gpointer user_data)
+app_settings_update_controls(TimerSettingsDialog *dialog)
 {
-  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->state == NULL) {
+    return;
+  }
+
+  if (dialog->close_to_tray_check != NULL) {
+    gtk_check_button_set_active(dialog->close_to_tray_check,
+                                dialog->state->close_to_tray);
+  }
+  if (dialog->autostart_check != NULL) {
+    gtk_check_button_set_active(dialog->autostart_check,
+                                dialog->state->autostart_enabled);
+  }
+  if (dialog->autostart_start_in_tray_check != NULL) {
+    gtk_check_button_set_active(dialog->autostart_start_in_tray_check,
+                                dialog->state->autostart_start_in_tray);
+    gtk_widget_set_sensitive(
+        GTK_WIDGET(dialog->autostart_start_in_tray_check),
+        dialog->state->autostart_enabled);
+  }
+  if (dialog->minimize_to_tray_check != NULL) {
+    gtk_check_button_set_active(dialog->minimize_to_tray_check,
+                                dialog->state->minimize_to_tray);
+  }
+}
+
+static void
+app_settings_apply(TimerSettingsDialog *dialog)
+{
   if (dialog == NULL || dialog->suppress_signals || dialog->state == NULL) {
     return;
   }
 
-  AppSettings settings = {.close_to_tray = TRUE};
-  if (button != NULL) {
-    settings.close_to_tray = gtk_check_button_get_active(button);
+  AppState *state = dialog->state;
+  AppSettings settings = {
+      .close_to_tray = state->close_to_tray,
+      .autostart_enabled = state->autostart_enabled,
+      .autostart_start_in_tray = state->autostart_start_in_tray,
+      .minimize_to_tray = state->minimize_to_tray,
+  };
+
+  if (dialog->close_to_tray_check != NULL) {
+    settings.close_to_tray =
+        gtk_check_button_get_active(dialog->close_to_tray_check);
+  }
+  if (dialog->autostart_check != NULL) {
+    settings.autostart_enabled =
+        gtk_check_button_get_active(dialog->autostart_check);
+  }
+  if (dialog->autostart_start_in_tray_check != NULL) {
+    settings.autostart_start_in_tray =
+        gtk_check_button_get_active(dialog->autostart_start_in_tray_check);
+  }
+  if (dialog->minimize_to_tray_check != NULL) {
+    settings.minimize_to_tray =
+        gtk_check_button_get_active(dialog->minimize_to_tray_check);
   }
 
-  dialog->state->close_to_tray = settings.close_to_tray;
+  gboolean prev_autostart = state->autostart_enabled;
+
+  state->close_to_tray = settings.close_to_tray;
+  state->autostart_enabled = settings.autostart_enabled;
+  state->autostart_start_in_tray = settings.autostart_start_in_tray;
+  state->minimize_to_tray = settings.minimize_to_tray;
+
+  if (dialog->autostart_start_in_tray_check != NULL) {
+    gtk_widget_set_sensitive(
+        GTK_WIDGET(dialog->autostart_start_in_tray_check),
+        settings.autostart_enabled);
+  }
 
   GError *error = NULL;
   if (!settings_storage_save_app(&settings, &error)) {
@@ -145,6 +208,21 @@ on_close_to_tray_toggled(GtkCheckButton *button, gpointer user_data)
               error ? error->message : "unknown error");
     g_clear_error(&error);
   }
+
+  if (settings.autostart_enabled != prev_autostart) {
+    if (!autostart_set_enabled(settings.autostart_enabled, &error)) {
+      g_warning("Failed to update autostart settings: %s",
+                error ? error->message : "unknown error");
+      g_clear_error(&error);
+    }
+  }
+}
+
+static void
+on_app_settings_toggled(GtkCheckButton *button, gpointer user_data)
+{
+  (void)button;
+  app_settings_apply(user_data);
 }
 
 static void
@@ -176,11 +254,7 @@ timer_settings_update_controls(TimerSettingsDialog *dialog)
                               (gdouble)config.long_break_interval);
   }
 
-  if (dialog->close_to_tray_check != NULL) {
-    gtk_check_button_set_active(dialog->close_to_tray_check,
-                                dialog->state->close_to_tray);
-  }
-
+  app_settings_update_controls(dialog);
   focus_guard_settings_update_controls(dialog);
 
   dialog->suppress_signals = prev_suppress;
@@ -313,39 +387,7 @@ show_timer_settings_window(AppState *state)
   gtk_box_append(GTK_BOX(timer_card), timer_desc);
   gtk_box_append(GTK_BOX(timer_card), timer_grid);
 
-  GtkWidget *behavior_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_add_css_class(behavior_card, "card");
-
-  GtkWidget *behavior_title = gtk_label_new("Window behavior");
-  gtk_widget_add_css_class(behavior_title, "card-title");
-  gtk_widget_set_halign(behavior_title, GTK_ALIGN_START);
-
-  GtkWidget *behavior_desc =
-      gtk_label_new("Control how the app behaves when the window is closed.");
-  gtk_widget_add_css_class(behavior_desc, "task-meta");
-  gtk_widget_set_halign(behavior_desc, GTK_ALIGN_START);
-  gtk_label_set_wrap(GTK_LABEL(behavior_desc), TRUE);
-
-  GtkWidget *behavior_grid = gtk_grid_new();
-  gtk_grid_set_row_spacing(GTK_GRID(behavior_grid), 10);
-  gtk_grid_set_column_spacing(GTK_GRID(behavior_grid), 16);
-
-  GtkWidget *tray_label = gtk_label_new("Close to tray");
-  gtk_widget_add_css_class(tray_label, "setting-label");
-  gtk_widget_set_halign(tray_label, GTK_ALIGN_START);
-  gtk_widget_set_hexpand(tray_label, TRUE);
-  GtkWidget *tray_check = gtk_check_button_new();
-  gtk_widget_set_halign(tray_check, GTK_ALIGN_END);
-
-  gtk_grid_attach(GTK_GRID(behavior_grid), tray_label, 0, 0, 1, 1);
-  gtk_grid_attach(GTK_GRID(behavior_grid), tray_check, 1, 0, 1, 1);
-
-  gtk_box_append(GTK_BOX(behavior_card), behavior_title);
-  gtk_box_append(GTK_BOX(behavior_card), behavior_desc);
-  gtk_box_append(GTK_BOX(behavior_card), behavior_grid);
-
   gtk_box_append(GTK_BOX(timer_page), timer_card);
-  gtk_box_append(GTK_BOX(timer_page), behavior_card);
 
   GtkWidget *timer_scroller = gtk_scrolled_window_new();
   gtk_widget_add_css_class(timer_scroller, "settings-scroller");
@@ -354,6 +396,83 @@ show_timer_settings_window(AppState *state)
                                  GTK_POLICY_AUTOMATIC);
   gtk_widget_set_vexpand(timer_scroller, TRUE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(timer_scroller), timer_page);
+
+  GtkWidget *app_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  gtk_widget_add_css_class(app_page, "settings-page");
+  gtk_widget_set_margin_top(app_page, 4);
+  gtk_widget_set_margin_bottom(app_page, 8);
+  gtk_widget_set_margin_start(app_page, 2);
+  gtk_widget_set_margin_end(app_page, 2);
+
+  GtkWidget *app_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(app_card, "card");
+
+  GtkWidget *app_title = gtk_label_new("Startup & tray");
+  gtk_widget_add_css_class(app_title, "card-title");
+  gtk_widget_set_halign(app_title, GTK_ALIGN_START);
+
+  GtkWidget *app_desc =
+      gtk_label_new("Configure how the app launches and hides.");
+  gtk_widget_add_css_class(app_desc, "task-meta");
+  gtk_widget_set_halign(app_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(app_desc), TRUE);
+
+  GtkWidget *app_grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(app_grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(app_grid), 16);
+
+  GtkWidget *autostart_label = gtk_label_new("Autostart on login");
+  gtk_widget_add_css_class(autostart_label, "setting-label");
+  gtk_widget_set_halign(autostart_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(autostart_label, TRUE);
+  GtkWidget *autostart_check = gtk_check_button_new();
+  gtk_widget_set_halign(autostart_check, GTK_ALIGN_END);
+
+  GtkWidget *autostart_tray_label =
+      gtk_label_new("Start in tray when autostarting");
+  gtk_widget_add_css_class(autostart_tray_label, "setting-label");
+  gtk_widget_set_halign(autostart_tray_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(autostart_tray_label, TRUE);
+  gtk_label_set_wrap(GTK_LABEL(autostart_tray_label), TRUE);
+  GtkWidget *autostart_tray_check = gtk_check_button_new();
+  gtk_widget_set_halign(autostart_tray_check, GTK_ALIGN_END);
+
+  GtkWidget *minimize_label = gtk_label_new("Minimize to tray");
+  gtk_widget_add_css_class(minimize_label, "setting-label");
+  gtk_widget_set_halign(minimize_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(minimize_label, TRUE);
+  GtkWidget *minimize_check = gtk_check_button_new();
+  gtk_widget_set_halign(minimize_check, GTK_ALIGN_END);
+
+  GtkWidget *tray_label = gtk_label_new("Close to tray");
+  gtk_widget_add_css_class(tray_label, "setting-label");
+  gtk_widget_set_halign(tray_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(tray_label, TRUE);
+  GtkWidget *tray_check = gtk_check_button_new();
+  gtk_widget_set_halign(tray_check, GTK_ALIGN_END);
+
+  gtk_grid_attach(GTK_GRID(app_grid), autostart_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), autostart_check, 1, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), autostart_tray_label, 0, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), autostart_tray_check, 1, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), minimize_label, 0, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), minimize_check, 1, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), tray_label, 0, 3, 1, 1);
+  gtk_grid_attach(GTK_GRID(app_grid), tray_check, 1, 3, 1, 1);
+
+  gtk_box_append(GTK_BOX(app_card), app_title);
+  gtk_box_append(GTK_BOX(app_card), app_desc);
+  gtk_box_append(GTK_BOX(app_card), app_grid);
+
+  gtk_box_append(GTK_BOX(app_page), app_card);
+
+  GtkWidget *app_scroller = gtk_scrolled_window_new();
+  gtk_widget_add_css_class(app_scroller, "settings-scroller");
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(app_scroller),
+                                 GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_vexpand(app_scroller, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(app_scroller), app_page);
 
   GtkWidget *focus_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
   gtk_widget_add_css_class(focus_page, "settings-page");
@@ -401,6 +520,10 @@ show_timer_settings_window(AppState *state)
   dialog->long_spin = GTK_SPIN_BUTTON(long_spin);
   dialog->interval_spin = GTK_SPIN_BUTTON(interval_spin);
   dialog->close_to_tray_check = GTK_CHECK_BUTTON(tray_check);
+  dialog->autostart_check = GTK_CHECK_BUTTON(autostart_check);
+  dialog->autostart_start_in_tray_check =
+      GTK_CHECK_BUTTON(autostart_tray_check);
+  dialog->minimize_to_tray_check = GTK_CHECK_BUTTON(minimize_check);
 
   g_signal_connect(focus_spin,
                    "value-changed",
@@ -420,12 +543,25 @@ show_timer_settings_window(AppState *state)
                    dialog);
   g_signal_connect(tray_check,
                    "toggled",
-                   G_CALLBACK(on_close_to_tray_toggled),
+                   G_CALLBACK(on_app_settings_toggled),
+                   dialog);
+  g_signal_connect(autostart_check,
+                   "toggled",
+                   G_CALLBACK(on_app_settings_toggled),
+                   dialog);
+  g_signal_connect(autostart_tray_check,
+                   "toggled",
+                   G_CALLBACK(on_app_settings_toggled),
+                   dialog);
+  g_signal_connect(minimize_check,
+                   "toggled",
+                   G_CALLBACK(on_app_settings_toggled),
                    dialog);
 
   focus_guard_settings_append(dialog, focus_page, chrome_page);
 
   gtk_stack_add_titled(GTK_STACK(stack), timer_scroller, "timer", "Timer");
+  gtk_stack_add_titled(GTK_STACK(stack), app_scroller, "app", "App");
   gtk_stack_add_titled(GTK_STACK(stack), focus_scroller, "focus", "Focus guard");
   if (chrome_scroller != NULL && dialog->focus_guard_ollama_section != NULL) {
     gtk_stack_add_titled(GTK_STACK(stack), chrome_scroller, "chrome", "Chrome");

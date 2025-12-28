@@ -43,6 +43,9 @@ typedef struct {
   FocusGuard *focus_guard;
   TrayItem *tray_item;
   gboolean close_to_tray;
+  gboolean autostart_enabled;
+  gboolean autostart_start_in_tray;
+  gboolean minimize_to_tray;
   gboolean quit_requested;
 } AppState;
 

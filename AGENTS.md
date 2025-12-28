@@ -266,3 +266,4 @@ Each PR includes motivation, implementation instructions, and testable standards
 - Only Chrome supported for relevance checks (for now).
 - Modern visual design prioritized over default GTK styling.
 - 2025-12-26: Refactored `src/main.c` into `src/app/` and `src/ui/` modules to enforce separation of concerns; `src/main.c` now only boots the app.
+- 2025-12-28: X11 helper calls in `src/utils/x11.c` are wrapped with `G_GNUC_BEGIN_IGNORE_DEPRECATIONS`/`G_GNUC_END_IGNORE_DEPRECATIONS` because GTK 4.18 deprecated the X11 surface/display helpers without a non-deprecated replacement for the needed WM hint behavior.

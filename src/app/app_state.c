@@ -12,6 +12,9 @@ app_state_create(GtkWindow *window, TaskStore *store)
   state->window = window;
   state->store = store;
   state->close_to_tray = TRUE;
+  state->autostart_enabled = FALSE;
+  state->autostart_start_in_tray = TRUE;
+  state->minimize_to_tray = FALSE;
   state->quit_requested = FALSE;
   return state;
 }
