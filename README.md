@@ -14,11 +14,9 @@ Low-power Pomodoro timer for Debian XFCE (X11), built with GTK4 and C. It combin
 
 ## Screenshots
 
-Add images here:
-- Main window
-- Floating overlay
-- Settings (timer + focus guard)
-- Usage stats
+![Main window](docs/screenshots/mainwindow.png)
+
+![Floating overlay](docs/screenshots/floatingoverlay.png)
 
 ## Feature tour
 
@@ -77,7 +75,7 @@ Focus guard works only during an active focus session with an active task:
 
 ### Chrome + Ollama relevance checks (optional)
 
-If built with libsoup + json-glib and Ollama is installed, an additional settings page appears:
+If built with `-Dchrome_ollama=enabled` (and libsoup/json-glib installed) and Ollama is installed, an additional settings page appears:
 - Only runs when Chrome/Chromium is the active app
 - Chrome must be launched with a remote debugging port (default 9222)
 - Fetches the active tab via CDP and extracts title, URL, and page text (innerText capped at 8000 chars)
@@ -139,7 +137,7 @@ Required dependencies:
 - Meson + Ninja
 - X11 development headers
 
-Optional (enables Chrome/Ollama features and the integration test):
+Optional (disabled by default; enables Chrome/Ollama features and the integration test):
 - libsoup-3.0
 - json-glib
 - python3 + `trafilatura` (optional; configure the Python path in Settings if using venv/conda)
@@ -159,6 +157,12 @@ Build commands:
 ```sh
 meson setup build
 ninja -C build
+```
+
+To enable Chrome/Ollama integration:
+
+```sh
+meson setup build -Dchrome_ollama=enabled
 ```
 
 ## Run
@@ -230,7 +234,7 @@ If Chrome is active during a focus session and the page is clearly irrelevant, t
 
 ## Tests
 
-If built with libsoup/json-glib, an integration test is available:
+If built with `-Dchrome_ollama=enabled` and libsoup/json-glib available, an integration test is available:
 
 ```sh
 meson test -C build
@@ -245,3 +249,7 @@ POMODORO_TEST_OLLAMA_MODEL=your-model-name meson test -C build
 ## App ID
 
 `com.scott.Xfce4FloatingPomodoro`
+
+## License
+
+MIT. See `LICENSE`.

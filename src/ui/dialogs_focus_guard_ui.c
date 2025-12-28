@@ -1,5 +1,7 @@
 #include "ui/dialogs_focus_guard_internal.h"
 
+#include "config.h"
+
 void
 focus_guard_settings_append(TimerSettingsDialog *dialog,
                             GtkWidget *focus_root,
@@ -144,9 +146,12 @@ focus_guard_settings_append(TimerSettingsDialog *dialog,
   gtk_box_append(GTK_BOX(focus_root), guard_card);
   gtk_box_append(GTK_BOX(focus_root), blacklist_card);
 
-  gboolean ollama_available = dialog->state != NULL &&
-                              dialog->state->focus_guard != NULL &&
-                              focus_guard_is_ollama_available(dialog->state->focus_guard);
+  gboolean ollama_available = FALSE;
+#if HAVE_CHROME_OLLAMA
+  ollama_available = dialog->state != NULL &&
+                     dialog->state->focus_guard != NULL &&
+                     focus_guard_is_ollama_available(dialog->state->focus_guard);
+#endif
 
   GtkCheckButton *chrome_check = NULL;
   GtkSpinButton *chrome_port_spin = NULL;

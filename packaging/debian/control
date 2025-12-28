@@ -1,7 +1,7 @@
 Source: xfce4-floating-pomodoro
 Section: utils
 Priority: optional
-Maintainer: Scott <scott@localhost>
+Maintainer: Scott <errortang234@gmail.com>
 Build-Depends: debhelper-compat (= 13),
  meson,
  ninja-build,
@@ -9,9 +9,7 @@ Build-Depends: debhelper-compat (= 13),
  libgtk-4-dev,
  libfontconfig1-dev,
  libx11-dev,
- libsqlite3-dev,
- libsoup-3.0-dev,
- libjson-glib-dev
+ libsqlite3-dev
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 

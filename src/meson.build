@@ -57,7 +57,7 @@ app_deps = [
   sqlite3_dep,
 ]
 
-if libsoup_dep.found() and json_glib_dep.found()
+if chrome_ollama_enabled
   app_deps += [libsoup_dep, json_glib_dep]
 endif
 

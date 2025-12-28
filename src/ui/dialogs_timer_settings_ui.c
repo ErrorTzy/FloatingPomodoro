@@ -1,5 +1,6 @@
 #include "ui/dialogs_timer_settings_internal.h"
 
+#include "config.h"
 #include "focus/focus_guard.h"
 
 GtkWidget *timer_settings_build_timer_page(TimerSettingsDialog *dialog);
@@ -82,8 +83,11 @@ timer_settings_show_window(AppState *state)
   gtk_widget_set_vexpand(focus_scroller, TRUE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(focus_scroller), focus_page);
 
-  gboolean ollama_available = state->focus_guard != NULL &&
-                              focus_guard_is_ollama_available(state->focus_guard);
+  gboolean ollama_available = FALSE;
+#if HAVE_CHROME_OLLAMA
+  ollama_available = state->focus_guard != NULL &&
+                     focus_guard_is_ollama_available(state->focus_guard);
+#endif
   GtkWidget *chrome_page = NULL;
   GtkWidget *chrome_scroller = NULL;
   if (ollama_available) {

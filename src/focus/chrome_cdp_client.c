@@ -1,7 +1,7 @@
 #include "focus/chrome_cdp_client.h"
 #include "config.h"
 
-#if HAVE_LIBSOUP && HAVE_JSON_GLIB
+#if HAVE_CHROME_OLLAMA
 
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>

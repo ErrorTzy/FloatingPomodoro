@@ -1,4 +1,4 @@
-if libsoup_dep.found() and json_glib_dep.found()
+if chrome_ollama_enabled
   test_deps = [
     dependency('glib-2.0'),
     dependency('gio-2.0'),
@@ -24,5 +24,5 @@ if libsoup_dep.found() and json_glib_dep.found()
     timeout: 300,
   )
 else
-  message('Skipping integration_chrome_ollama: libsoup/json-glib not available')
+  message('Skipping integration_chrome_ollama: chrome/ollama integration disabled')
 endif

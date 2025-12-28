@@ -1,0 +1,5 @@
+option('chrome_ollama',
+  type: 'feature',
+  value: 'disabled',
+  description: 'Enable Chrome/Ollama relevance checks (requires libsoup-3.0 and json-glib)'
+)
