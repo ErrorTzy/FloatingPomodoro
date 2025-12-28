@@ -6,6 +6,12 @@
 #include "core/pomodoro_timer.h"
 
 #define OVERLAY_INFO_REVEAL_DURATION_MS 220
+#define OVERLAY_BUBBLE_SIZE 128
+#define OVERLAY_WINDOW_MARGIN 6
+#define OVERLAY_WARNING_HALO_PADDING 32
+#define OVERLAY_WARNING_APP_WIDTH_RATIO 0.6
+#define OVERLAY_WARNING_FOCUS_WIDTH_RATIO 0.7
+#define OVERLAY_SIZE_TICK_DEFAULT_MS 300
 
 typedef struct _OverlayWindow OverlayWindow;
 
@@ -58,6 +64,10 @@ void overlay_window_bind_actions(OverlayWindow *overlay, GtkWidget *bubble);
 void overlay_window_update_input_region(OverlayWindow *overlay);
 void overlay_window_request_size_updates(OverlayWindow *overlay,
                                          guint duration_ms);
+void overlay_window_update_warning_app_width(OverlayWindow *overlay,
+                                             int bubble_width);
+void overlay_window_update_warning_focus_size(OverlayWindow *overlay,
+                                              int bubble_width);
 
 void overlay_window_draw(GtkDrawingArea *area,
                          cairo_t *cr,

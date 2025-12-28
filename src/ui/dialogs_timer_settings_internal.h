@@ -39,3 +39,16 @@ void focus_guard_settings_append(TimerSettingsDialog *dialog,
                                  GtkWidget *chrome_root);
 void focus_guard_settings_update_controls(TimerSettingsDialog *dialog);
 void focus_guard_start_active_monitor(TimerSettingsDialog *dialog);
+
+void timer_settings_show_window(AppState *state);
+
+void timer_settings_dialog_free(gpointer data);
+void on_timer_settings_window_destroy(GtkWidget *widget, gpointer user_data);
+gboolean on_timer_settings_window_close(GtkWindow *window, gpointer user_data);
+void on_timer_settings_changed(GtkSpinButton *spin, gpointer user_data);
+void on_app_settings_toggled(GtkCheckButton *button, gpointer user_data);
+void on_app_reset_settings_clicked(GtkButton *button, gpointer user_data);
+void on_app_archive_all_clicked(GtkButton *button, gpointer user_data);
+void on_app_delete_archived_clicked(GtkButton *button, gpointer user_data);
+void on_app_delete_stats_clicked(GtkButton *button, gpointer user_data);
+void timer_settings_update_controls(TimerSettingsDialog *dialog);
