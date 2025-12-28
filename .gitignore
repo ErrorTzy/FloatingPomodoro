@@ -2,3 +2,8 @@
 /builddir/
 /meson-private/
 /meson-logs/
+/packaging/debian/.debhelper/
+/packaging/debian/debhelper-build-stamp
+/packaging/debian/files
+/packaging/debian/*.substvars
+/packaging/debian/xfce4-floating-pomodoro/
