@@ -112,6 +112,7 @@ Chrome relevance (only when Ollama is available):
 - Select Ollama model
 - Refresh model list
 - Chrome debug port
+- Trafilatura python (optional; set a venv/conda python)
 
 Maintenance:
 - Reset settings to defaults
@@ -141,7 +142,7 @@ Required dependencies:
 Optional (enables Chrome/Ollama features and the integration test):
 - libsoup-3.0
 - json-glib
-- python3 + `trafilatura` (optional; the app detects and reports availability in settings)
+- python3 + `trafilatura` (optional; configure the Python path in Settings if using venv/conda)
 
 Typical Debian packages (may vary by release):
 - `libgtk-4-dev`
@@ -150,7 +151,7 @@ Typical Debian packages (may vary by release):
 - `libx11-dev`
 - `libsoup-3.0-dev` (optional)
 - `libjson-glib-dev` (optional)
-- `python3` and `python3-trafilatura` (optional)
+- `python3` (optional; trafilatura is typically installed via pip/venv/conda)
 - `meson`, `ninja-build`, `pkg-config`
 
 Build commands:
@@ -204,8 +205,9 @@ POMODORO_TEST_TIMER=1 ./build/xfce4-floating-pomodoro
 ## Chrome and Ollama setup (optional)
 
 1) Ensure Ollama is installed and running. The app detects `ollama` from PATH.
-   Optional: install `python3` + `trafilatura`. The app reports its availability in
-   Settings but it is not required for Chrome relevance checks.
+   Optional: install `python3` + `trafilatura` in a venv/conda or system Python.
+   If it is not in your system PATH, set the interpreter in Settings → Chrome →
+   "Trafilatura python".
 2) Pull a model:
 
 ```sh
@@ -222,6 +224,7 @@ google-chrome --remote-debugging-port=9222
 - Refresh model list
 - Select a model
 - Enable relevance checks
+- (Optional) Set "Trafilatura python" if using a venv/conda interpreter
 
 If Chrome is active during a focus session and the page is clearly irrelevant, the overlay will warn.
 
