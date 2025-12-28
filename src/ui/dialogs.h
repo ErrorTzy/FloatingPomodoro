@@ -15,11 +15,19 @@ typedef enum {
   DIALOG_CONFIRM_ACTIVATE_TASK = 1
 } DialogConfirmAction;
 
+typedef void (*DialogConfirmCallback)(AppState *state, gpointer user_data);
+
 void dialogs_show_confirm(AppState *state,
                           const char *title_text,
                           const char *body_text,
                           PomodoroTask *task,
                           DialogConfirmAction action);
+void dialogs_show_confirm_action(AppState *state,
+                                 const char *title_text,
+                                 const char *body_text,
+                                 DialogConfirmCallback callback,
+                                 gpointer user_data,
+                                 GDestroyNotify user_data_free);
 void dialogs_cleanup_archive_settings(AppState *state);
 void dialogs_cleanup_timer_settings(AppState *state);
 void dialogs_cleanup_archived(AppState *state);

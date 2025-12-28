@@ -2,7 +2,7 @@
 
 #include <errno.h>
 
-static AppSettings
+AppSettings
 settings_storage_app_default(void)
 {
   AppSettings settings = {0};

@@ -12,6 +12,7 @@ typedef struct {
   gboolean minimize_to_tray;
 } AppSettings;
 
+AppSettings settings_storage_app_default(void);
 char *settings_storage_get_path(void);
 gboolean settings_storage_load_timer(PomodoroTimerConfig *config, GError **error);
 gboolean settings_storage_save_timer(const PomodoroTimerConfig *config, GError **error);

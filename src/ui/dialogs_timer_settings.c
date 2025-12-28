@@ -2,11 +2,17 @@
 #include "ui/dialogs_timer_settings_internal.h"
 
 #include "core/pomodoro_timer.h"
+#include "core/task_store.h"
 #include "focus/focus_guard.h"
 #include "storage/settings_storage.h"
+#include "ui/task_list.h"
 #include "utils/autostart.h"
 
 static void timer_settings_update_controls(TimerSettingsDialog *dialog);
+static void apply_settings_reset(AppState *state, gpointer user_data);
+static void apply_archive_all_tasks(AppState *state, gpointer user_data);
+static void apply_delete_archived_tasks(AppState *state, gpointer user_data);
+static void apply_delete_stats(AppState *state, gpointer user_data);
 
 static void
 timer_settings_dialog_teardown(TimerSettingsDialog *dialog)
@@ -223,6 +229,175 @@ on_app_settings_toggled(GtkCheckButton *button, gpointer user_data)
 {
   (void)button;
   app_settings_apply(user_data);
+}
+
+static void
+apply_settings_reset(AppState *state, gpointer user_data)
+{
+  TimerSettingsDialog *dialog = user_data;
+  if (state == NULL) {
+    return;
+  }
+
+  PomodoroTimerConfig config = pomodoro_timer_config_default();
+  if (state->timer != NULL) {
+    pomodoro_timer_apply_config(state->timer, config);
+  }
+
+  GError *error = NULL;
+  if (!settings_storage_save_timer(&config, &error)) {
+    g_warning("Failed to save timer defaults: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+
+  AppSettings app_settings = settings_storage_app_default();
+  gboolean prev_autostart = state->autostart_enabled;
+
+  state->close_to_tray = app_settings.close_to_tray;
+  state->autostart_enabled = app_settings.autostart_enabled;
+  state->autostart_start_in_tray = app_settings.autostart_start_in_tray;
+  state->minimize_to_tray = app_settings.minimize_to_tray;
+
+  if (!settings_storage_save_app(&app_settings, &error)) {
+    g_warning("Failed to save app defaults: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+
+  if (app_settings.autostart_enabled != prev_autostart) {
+    if (!autostart_set_enabled(app_settings.autostart_enabled, &error)) {
+      g_warning("Failed to update autostart defaults: %s",
+                error ? error->message : "unknown error");
+      g_clear_error(&error);
+    }
+  }
+
+  FocusGuardConfig guard_config = focus_guard_config_default();
+  if (state->focus_guard != NULL) {
+    focus_guard_apply_config(state->focus_guard, guard_config);
+  }
+  if (!settings_storage_save_focus_guard(&guard_config, &error)) {
+    g_warning("Failed to save focus guard defaults: %s",
+              error ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+  focus_guard_config_clear(&guard_config);
+
+  if (dialog != NULL) {
+    timer_settings_update_controls(dialog);
+  }
+}
+
+static void
+apply_archive_all_tasks(AppState *state, gpointer user_data)
+{
+  (void)user_data;
+  if (state == NULL || state->store == NULL) {
+    return;
+  }
+
+  task_store_archive_all(state->store);
+  task_list_save_store(state);
+  task_list_refresh(state);
+}
+
+static void
+apply_delete_archived_tasks(AppState *state, gpointer user_data)
+{
+  (void)user_data;
+  if (state == NULL || state->store == NULL) {
+    return;
+  }
+
+  if (task_store_remove_archived(state->store) == 0) {
+    return;
+  }
+  task_list_save_store(state);
+  task_list_refresh(state);
+}
+
+static void
+apply_delete_stats(AppState *state, gpointer user_data)
+{
+  (void)user_data;
+  if (state == NULL || state->focus_guard == NULL) {
+    return;
+  }
+
+  focus_guard_clear_stats(state->focus_guard);
+}
+
+static void
+on_app_reset_settings_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->state == NULL) {
+    return;
+  }
+
+  dialogs_show_confirm_action(
+      dialog->state,
+      "Reset settings?",
+      "This will restore timer, app, focus guard, and Chrome settings to their defaults.",
+      apply_settings_reset,
+      dialog,
+      NULL);
+}
+
+static void
+on_app_archive_all_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->state == NULL) {
+    return;
+  }
+
+  dialogs_show_confirm_action(
+      dialog->state,
+      "Archive all tasks?",
+      "All active, pending, and completed tasks will move to the archive. You can restore them later.",
+      apply_archive_all_tasks,
+      NULL,
+      NULL);
+}
+
+static void
+on_app_delete_archived_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->state == NULL) {
+    return;
+  }
+
+  dialogs_show_confirm_action(
+      dialog->state,
+      "Delete archived tasks?",
+      "Archived tasks will be permanently removed.",
+      apply_delete_archived_tasks,
+      NULL,
+      NULL);
+}
+
+static void
+on_app_delete_stats_clicked(GtkButton *button, gpointer user_data)
+{
+  (void)button;
+  TimerSettingsDialog *dialog = user_data;
+  if (dialog == NULL || dialog->state == NULL) {
+    return;
+  }
+
+  dialogs_show_confirm_action(
+      dialog->state,
+      "Delete all usage stats?",
+      "Stored focus guard usage stats will be permanently removed.",
+      apply_delete_stats,
+      NULL,
+      NULL);
 }
 
 static void
@@ -466,6 +641,75 @@ show_timer_settings_window(AppState *state)
 
   gtk_box_append(GTK_BOX(app_page), app_card);
 
+  GtkWidget *data_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(data_card, "card");
+
+  GtkWidget *data_title = gtk_label_new("Data & maintenance");
+  gtk_widget_add_css_class(data_title, "card-title");
+  gtk_widget_set_halign(data_title, GTK_ALIGN_START);
+
+  GtkWidget *data_desc = gtk_label_new(
+      "Run bulk actions on settings, tasks, or usage stats.");
+  gtk_widget_add_css_class(data_desc, "task-meta");
+  gtk_widget_set_halign(data_desc, GTK_ALIGN_START);
+  gtk_label_set_wrap(GTK_LABEL(data_desc), TRUE);
+
+  GtkWidget *data_grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(data_grid), 10);
+  gtk_grid_set_column_spacing(GTK_GRID(data_grid), 16);
+
+  GtkWidget *reset_label = gtk_label_new("Reset settings to defaults");
+  gtk_widget_add_css_class(reset_label, "setting-label");
+  gtk_widget_set_halign(reset_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(reset_label, TRUE);
+  GtkWidget *reset_button = gtk_button_new_with_label("Reset");
+  gtk_widget_add_css_class(reset_button, "btn-secondary");
+  gtk_widget_add_css_class(reset_button, "btn-compact");
+  gtk_widget_set_halign(reset_button, GTK_ALIGN_END);
+
+  GtkWidget *archive_all_label = gtk_label_new("Archive all tasks");
+  gtk_widget_add_css_class(archive_all_label, "setting-label");
+  gtk_widget_set_halign(archive_all_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(archive_all_label, TRUE);
+  GtkWidget *archive_all_button = gtk_button_new_with_label("Archive all");
+  gtk_widget_add_css_class(archive_all_button, "btn-secondary");
+  gtk_widget_add_css_class(archive_all_button, "btn-compact");
+  gtk_widget_set_halign(archive_all_button, GTK_ALIGN_END);
+
+  GtkWidget *delete_archived_label = gtk_label_new("Delete archived tasks");
+  gtk_widget_add_css_class(delete_archived_label, "setting-label");
+  gtk_widget_set_halign(delete_archived_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(delete_archived_label, TRUE);
+  GtkWidget *delete_archived_button =
+      gtk_button_new_with_label("Delete archived");
+  gtk_widget_add_css_class(delete_archived_button, "btn-danger");
+  gtk_widget_add_css_class(delete_archived_button, "btn-compact");
+  gtk_widget_set_halign(delete_archived_button, GTK_ALIGN_END);
+
+  GtkWidget *delete_stats_label = gtk_label_new("Delete all usage stats");
+  gtk_widget_add_css_class(delete_stats_label, "setting-label");
+  gtk_widget_set_halign(delete_stats_label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(delete_stats_label, TRUE);
+  GtkWidget *delete_stats_button = gtk_button_new_with_label("Delete stats");
+  gtk_widget_add_css_class(delete_stats_button, "btn-danger");
+  gtk_widget_add_css_class(delete_stats_button, "btn-compact");
+  gtk_widget_set_halign(delete_stats_button, GTK_ALIGN_END);
+
+  gtk_grid_attach(GTK_GRID(data_grid), reset_label, 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), reset_button, 1, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), archive_all_label, 0, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), archive_all_button, 1, 1, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), delete_archived_label, 0, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), delete_archived_button, 1, 2, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), delete_stats_label, 0, 3, 1, 1);
+  gtk_grid_attach(GTK_GRID(data_grid), delete_stats_button, 1, 3, 1, 1);
+
+  gtk_box_append(GTK_BOX(data_card), data_title);
+  gtk_box_append(GTK_BOX(data_card), data_desc);
+  gtk_box_append(GTK_BOX(data_card), data_grid);
+
+  gtk_box_append(GTK_BOX(app_page), data_card);
+
   GtkWidget *app_scroller = gtk_scrolled_window_new();
   gtk_widget_add_css_class(app_scroller, "settings-scroller");
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(app_scroller),
@@ -556,6 +800,22 @@ show_timer_settings_window(AppState *state)
   g_signal_connect(minimize_check,
                    "toggled",
                    G_CALLBACK(on_app_settings_toggled),
+                   dialog);
+  g_signal_connect(reset_button,
+                   "clicked",
+                   G_CALLBACK(on_app_reset_settings_clicked),
+                   dialog);
+  g_signal_connect(archive_all_button,
+                   "clicked",
+                   G_CALLBACK(on_app_archive_all_clicked),
+                   dialog);
+  g_signal_connect(delete_archived_button,
+                   "clicked",
+                   G_CALLBACK(on_app_delete_archived_clicked),
+                   dialog);
+  g_signal_connect(delete_stats_button,
+                   "clicked",
+                   G_CALLBACK(on_app_delete_stats_clicked),
                    dialog);
 
   focus_guard_settings_append(dialog, focus_page, chrome_page);

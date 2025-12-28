@@ -1517,6 +1517,28 @@ focus_guard_get_config(const FocusGuard *guard)
   return focus_guard_config_copy(&guard->config);
 }
 
+void
+focus_guard_clear_stats(FocusGuard *guard)
+{
+  if (guard == NULL) {
+    return;
+  }
+
+  if (guard->stats_store != NULL) {
+    usage_stats_store_clear(guard->stats_store);
+  }
+
+  focus_guard_clear_usage_table(guard->usage_global);
+  focus_guard_clear_usage_table(guard->usage_task_view);
+  focus_guard_clear_usage_table(guard->bucket_global);
+  if (guard->bucket_task != NULL) {
+    g_hash_table_remove_all(guard->bucket_task);
+  }
+  guard->bucket_start_utc = 0;
+  guard->usage_dirty = TRUE;
+  focus_guard_update_stats_ui(guard);
+}
+
 gboolean
 focus_guard_is_ollama_available(const FocusGuard *guard)
 {

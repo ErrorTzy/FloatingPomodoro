@@ -441,6 +441,42 @@ task_store_apply_archive_policy(TaskStore *store)
 }
 
 void
+task_store_archive_all(TaskStore *store)
+{
+  if (store == NULL) {
+    return;
+  }
+
+  for (guint i = 0; i < store->tasks->len; i++) {
+    PomodoroTask *task = g_ptr_array_index(store->tasks, i);
+    if (task == NULL || task->status == TASK_STATUS_ARCHIVED) {
+      continue;
+    }
+    task_store_archive_task(store, task);
+  }
+}
+
+guint
+task_store_remove_archived(TaskStore *store)
+{
+  if (store == NULL) {
+    return 0;
+  }
+
+  guint removed = 0;
+  for (gint i = (gint)store->tasks->len - 1; i >= 0; i--) {
+    PomodoroTask *task = g_ptr_array_index(store->tasks, (guint)i);
+    if (task == NULL || task->status != TASK_STATUS_ARCHIVED) {
+      continue;
+    }
+    g_ptr_array_remove(store->tasks, task);
+    removed++;
+  }
+
+  return removed;
+}
+
+void
 task_store_enforce_single_active(TaskStore *store)
 {
   if (store == NULL) {

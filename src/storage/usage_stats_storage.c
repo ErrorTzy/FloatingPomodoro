@@ -269,6 +269,16 @@ usage_stats_store_query_day(UsageStatsStore *store,
 }
 
 gboolean
+usage_stats_store_clear(UsageStatsStore *store)
+{
+  if (store == NULL || store->db == NULL) {
+    return FALSE;
+  }
+
+  return usage_stats_store_exec(store, "DELETE FROM app_usage");
+}
+
+gboolean
 usage_stats_store_prune(UsageStatsStore *store, gint64 cutoff_utc)
 {
   if (store == NULL || store->db == NULL) {

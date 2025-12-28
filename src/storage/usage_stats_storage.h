@@ -27,6 +27,7 @@ GPtrArray *usage_stats_store_query_day(UsageStatsStore *store,
                                        const char *scope,
                                        const char *task_id);
 
+gboolean usage_stats_store_clear(UsageStatsStore *store);
 gboolean usage_stats_store_prune(UsageStatsStore *store, gint64 cutoff_utc);
 
 void usage_stats_entry_free(gpointer data);
