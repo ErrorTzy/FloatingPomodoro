@@ -1,4 +1,9 @@
 #!/usr/bin/make -f
 
+CHROME_OLLAMA ?= disabled
+
 %:
 	dh $@ --buildsystem=meson
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Dchrome_ollama=$(CHROME_OLLAMA)
