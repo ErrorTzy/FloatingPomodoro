@@ -181,19 +181,39 @@ task_list_append_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   gtk_box_append(GTK_BOX(cycle_stepper), count_label);
   gtk_box_append(GTK_BOX(cycle_stepper), increment_button);
 
-  GtkWidget *status_button = gtk_button_new();
-  gtk_widget_add_css_class(status_button, "icon-button");
-  gtk_widget_set_size_request(status_button, 36, 36);
-  GtkWidget *status_icon = NULL;
-  const char *status_label = NULL;
+  if (status == TASK_STATUS_ARCHIVED) {
+    gtk_widget_set_sensitive(cycle_stepper, FALSE);
+  }
 
-  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-  gtk_widget_set_hexpand(actions, FALSE);
+  const char *status_text = "Active";
+  if (status == TASK_STATUS_PENDING) {
+    status_text = "Pending";
+  } else if (status == TASK_STATUS_COMPLETED) {
+    status_text = "Complete";
+  } else if (status == TASK_STATUS_ARCHIVED) {
+    status_text = "Archived";
+  }
+
+  GtkWidget *status_button = gtk_button_new_with_label(status_text);
+  gtk_widget_add_css_class(status_button, "task-status");
+  gtk_widget_add_css_class(status_button, "tag");
+  gtk_widget_set_valign(status_button, GTK_ALIGN_CENTER);
+  if (status == TASK_STATUS_PENDING) {
+    gtk_widget_add_css_class(status_button, "tag-pending");
+  } else if (status == TASK_STATUS_COMPLETED) {
+    gtk_widget_add_css_class(status_button, "tag-success");
+  } else if (status == TASK_STATUS_ARCHIVED) {
+    gtk_widget_add_css_class(status_button, "tag-muted");
+    gtk_widget_set_sensitive(status_button, FALSE);
+  }
+
+  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
 
   GtkWidget *edit_button = gtk_button_new();
   gtk_widget_add_css_class(edit_button, "icon-button");
   gtk_widget_set_size_request(edit_button, 32, 32);
-  GtkWidget *edit_icon = create_task_icon("document-edit-symbolic");
+  GtkWidget *edit_icon = create_task_icon("pomodoro-edit-symbolic");
   gtk_button_set_child(GTK_BUTTON(edit_button), edit_icon);
   gtk_widget_set_tooltip_text(edit_button, "Edit task");
 
@@ -207,12 +227,13 @@ task_list_append_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   GtkWidget *restore_button = gtk_button_new();
   gtk_widget_add_css_class(restore_button, "icon-button");
   gtk_widget_set_size_request(restore_button, 32, 32);
-  GtkWidget *restore_icon = create_task_icon("view-refresh-symbolic");
+  GtkWidget *restore_icon = create_task_icon("pomodoro-restore-symbolic");
   gtk_button_set_child(GTK_BUTTON(restore_button), restore_icon);
   gtk_widget_set_tooltip_text(restore_button, "Restore task");
 
   GtkWidget *delete_button = gtk_button_new();
   gtk_widget_add_css_class(delete_button, "icon-button");
+  gtk_widget_add_css_class(delete_button, "icon-danger");
   gtk_widget_set_size_request(delete_button, 32, 32);
   GtkWidget *delete_icon = create_task_icon("pomodoro-delete-symbolic");
   gtk_button_set_child(GTK_BUTTON(delete_button), delete_icon);
@@ -221,27 +242,12 @@ task_list_append_row(AppState *state, GtkWidget *list, PomodoroTask *task)
   gtk_box_append(GTK_BOX(actions), edit_button);
 
   if (status == TASK_STATUS_ARCHIVED) {
-    status_icon = create_task_icon("pomodoro-archive-symbolic");
-    status_label = "Archived";
     gtk_box_append(GTK_BOX(actions), restore_button);
-  } else if (status == TASK_STATUS_COMPLETED) {
-    status_icon = create_task_icon("emblem-ok-symbolic");
-    status_label = "Completed";
-    gtk_box_append(GTK_BOX(actions), archive_button);
-  } else if (status == TASK_STATUS_PENDING) {
-    status_icon = create_task_icon("view-paged-symbolic");
-    status_label = "Pending";
   } else {
-    status_icon = create_task_icon("media-playback-start-symbolic");
-    status_label = "Active";
+    gtk_box_append(GTK_BOX(actions), archive_button);
   }
 
-  if (status == TASK_STATUS_ARCHIVED) {
-    gtk_box_append(GTK_BOX(actions), delete_button);
-  }
-
-  gtk_button_set_child(GTK_BUTTON(status_button), status_icon);
-  gtk_widget_set_tooltip_text(status_button, status_label);
+  gtk_box_append(GTK_BOX(actions), delete_button);
 
   TaskRowControls *controls = g_new0(TaskRowControls, 1);
   controls->state = state;
