@@ -4,10 +4,14 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
 static char *
-focus_guard_x11_get_window_title(Display *xdisplay, Window window)
+focus_guard_x11_get_window_title(GdkDisplay *display,
+                                 Display *xdisplay,
+                                 Window window)
 {
-  if (xdisplay == NULL || window == 0) {
+  if (display == NULL || xdisplay == NULL || window == 0) {
     return NULL;
   }
 
@@ -20,6 +24,8 @@ focus_guard_x11_get_window_title(Display *xdisplay, Window window)
     unsigned long nitems = 0;
     unsigned long bytes_after = 0;
     unsigned char *prop = NULL;
+
+    gdk_x11_display_error_trap_push(display);
     int status = XGetWindowProperty(xdisplay,
                                     window,
                                     net_wm_name,
@@ -32,7 +38,9 @@ focus_guard_x11_get_window_title(Display *xdisplay, Window window)
                                     &nitems,
                                     &bytes_after,
                                     &prop);
-    if (status == Success && prop != NULL) {
+    int error = gdk_x11_display_error_trap_pop(display);
+
+    if (error == 0 && status == Success && prop != NULL) {
       char *title = g_strndup((const char *)prop, (gsize)nitems);
       XFree(prop);
       if (title != NULL && *title != '\0') {
@@ -40,16 +48,25 @@ focus_guard_x11_get_window_title(Display *xdisplay, Window window)
       }
       g_free(title);
     }
+    if (prop != NULL) {
+      XFree(prop);
+    }
   }
 
+  gdk_x11_display_error_trap_push(display);
   char *fallback = NULL;
-  if (XFetchName(xdisplay, window, &fallback) && fallback != NULL) {
+  int fetch_ok = XFetchName(xdisplay, window, &fallback);
+  int error = gdk_x11_display_error_trap_pop(display);
+
+  if (error == 0 && fetch_ok && fallback != NULL) {
     char *title = g_strdup(fallback);
     XFree(fallback);
     if (title != NULL && *title != '\0') {
       return title;
     }
     g_free(title);
+  } else if (fallback != NULL) {
+    XFree(fallback);
   }
 
   return NULL;
@@ -70,9 +87,7 @@ focus_guard_x11_get_active_app(char **app_name_out, char **title_out)
     return FALSE;
   }
 
-  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
   Display *xdisplay = gdk_x11_display_get_xdisplay(display);
-  G_GNUC_END_IGNORE_DEPRECATIONS
   if (xdisplay == NULL) {
     return FALSE;
   }
@@ -118,22 +133,26 @@ focus_guard_x11_get_active_app(char **app_name_out, char **title_out)
   char *res_name = NULL;
   char *res_class = NULL;
   XClassHint class_hint = {0};
-  if (XGetClassHint(xdisplay, active_window, &class_hint)) {
+
+  gdk_x11_display_error_trap_push(display);
+  int got_class = XGetClassHint(xdisplay, active_window, &class_hint);
+  int error = gdk_x11_display_error_trap_pop(display);
+
+  if (error == 0 && got_class) {
     if (class_hint.res_name != NULL) {
       res_name = g_strdup(class_hint.res_name);
-    }
-    if (class_hint.res_class != NULL) {
-      res_class = g_strdup(class_hint.res_class);
-    }
-    if (class_hint.res_name != NULL) {
       XFree(class_hint.res_name);
     }
     if (class_hint.res_class != NULL) {
+      res_class = g_strdup(class_hint.res_class);
       XFree(class_hint.res_class);
     }
+  } else if (error != 0) {
+    /* Window was destroyed between getting active window and querying it */
+    return FALSE;
   }
 
-  char *title = focus_guard_x11_get_window_title(xdisplay, active_window);
+  char *title = focus_guard_x11_get_window_title(display, xdisplay, active_window);
   char *app_name = NULL;
   if (res_class != NULL && *res_class != '\0') {
     app_name = res_class;
@@ -162,3 +181,5 @@ focus_guard_x11_get_active_app(char **app_name_out, char **title_out)
 
   return app_name != NULL;
 }
+
+G_GNUC_END_IGNORE_DEPRECATIONS

@@ -1,3 +1,9 @@
+floating-pomodoro (0.1.1-1) unstable; urgency=medium
+
+  * Fix X11 BadWindow crash when active window is destroyed during focus guard check
+
+ -- Scott <errortang234@gmail.com>  Wed, 31 Dec 2025 16:10:00 +0000
+
 floating-pomodoro (0.1.0-1) unstable; urgency=medium
 
   * Initial Debian packaging.
